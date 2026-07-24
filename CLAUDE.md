@@ -85,9 +85,47 @@ request has since started (e.g. rapidly toggling Current/Past or changing
 the year). Don't remove this without another way to prevent race conditions
 between overlapping fetches.
 
+**Map styling is deliberately monochrome + red.** `stripToPlaceLabelsOnly()`
+in `src/map.ts` takes OpenFreeMap's full-colour Liberty style and, on every
+`load`, programmatically forces it down to a white background plus black
+place-name labels — everything else (roads, water, buildings, POI icons, the
+shaded-relief raster) gets `visibility: 'none'`. It walks `map.getStyle().layers`
+structurally (by `type` / `source-layer === 'place'`) rather than by hardcoded
+layer id, so it keeps working if Liberty's ~110-layer list changes upstream.
+Fire polygons (added separately in `main.ts`) are the only other colour, in
+red. If you need to reintroduce any basemap colour (e.g. water), add a case
+to that function rather than switching to a different base style — Liberty
+was chosen specifically so place-label layout/hierarchy could be kept as-is
+while everything else is stripped.
+
+**Globe projection requires the style to be loaded.** `map.setProjection({ type: "globe" })`
+throws ("Style is not done loading.") if called before the map's `load`
+event — hence it lives inside the same `load` handler as the style-stripping
+call, not immediately after `new Map(...)`.
+
+## Gotchas
+
+**Vite dev server + maplibre-gl v6: exclude it from dependency
+pre-bundling.** Without `optimizeDeps.exclude: ["maplibre-gl"]` in
+`vite.config.ts`, the map silently never finishes loading in dev — no
+console error, `map.on('load', ...)` never fires, `isStyleLoaded()` stays
+`false` forever. Cause: maplibre-gl v6 ships a separate Web Worker file for
+tile parsing; Vite's dependency optimizer mishandles that extra entry point,
+so the worker 404s from `node_modules/.vite/deps/maplibre-gl-worker.mjs` and
+vector tiles can never be parsed. Background/raster layers (which don't need
+the worker) render fine, which makes this look like a partial-success state
+rather than the total blocker it is — if the map ever regresses to
+"basemap looks empty/frozen, no JS errors," check this first before
+suspecting the style-stripping logic.
+
+**`maplibre-gl` v6 has no default export.** `import maplibregl from
+"maplibre-gl"` (the v4-era pattern) fails to compile — use named imports
+(`import { Map, NavigationControl, Popup, ... } from "maplibre-gl"`).
+
 ## Key files
 
-- `src/map.ts` — MapLibre init, OpenFreeMap basemap, Europe bounds.
+- `src/map.ts` — MapLibre init, OpenFreeMap basemap reduced to white +
+  black-labels-only, globe projection, Europe bounds.
 - `src/effis.ts` — EFFIS fetch/parse/filter logic and property accessors.
 - `src/main.ts` — wires the map, the current/past toggle, year `<select>`,
   and click-to-popup behavior together.

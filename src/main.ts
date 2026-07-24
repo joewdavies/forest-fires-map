@@ -1,5 +1,5 @@
 import "./style.css";
-import maplibregl from "maplibre-gl";
+import { Popup, type GeoJSONSource, type LngLat, type MapGeoJSONFeature, type MapLayerMouseEvent } from "maplibre-gl";
 import type { FeatureCollection } from "geojson";
 import { createMap } from "./map";
 import {
@@ -31,7 +31,7 @@ let requestId = 0;
 populateYearSelect();
 
 const map = createMap(mapContainer);
-const popup = new maplibregl.Popup({ closeButton: true, closeOnClick: true, maxWidth: "280px" });
+const popup = new Popup({ closeButton: true, closeOnClick: true, maxWidth: "280px" });
 
 map.on("load", () => {
   map.addSource(FIRE_SOURCE_ID, { type: "geojson", data: emptyCollection() });
@@ -40,14 +40,14 @@ map.on("load", () => {
     id: FIRE_FILL_LAYER,
     type: "fill",
     source: FIRE_SOURCE_ID,
-    paint: { "fill-color": "#e25822", "fill-opacity": 0.55 },
+    paint: { "fill-color": "#ff0000", "fill-opacity": 0.6 },
   });
 
   map.addLayer({
     id: FIRE_OUTLINE_LAYER,
     type: "line",
     source: FIRE_SOURCE_ID,
-    paint: { "line-color": "#ff3d00", "line-width": 1 },
+    paint: { "line-color": "#ff0000", "line-width": 1 },
   });
 
   map.on("mouseenter", FIRE_FILL_LAYER, () => {
@@ -56,7 +56,7 @@ map.on("load", () => {
   map.on("mouseleave", FIRE_FILL_LAYER, () => {
     map.getCanvas().style.cursor = "";
   });
-  map.on("click", FIRE_FILL_LAYER, (e) => {
+  map.on("click", FIRE_FILL_LAYER, (e: MapLayerMouseEvent) => {
     const feature = e.features?.[0];
     if (feature) showFirePopup(feature, e.lngLat);
   });
@@ -106,7 +106,7 @@ function setStatus(message: string, state?: "error") {
 
 async function loadFires() {
   const thisRequest = ++requestId;
-  const source = map.getSource(FIRE_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
+  const source = map.getSource(FIRE_SOURCE_ID) as GeoJSONSource | undefined;
   if (!source) return;
 
   const year = yearSelect.value;
@@ -134,7 +134,7 @@ function describeResult(count: number, year: string): string {
   return `${count.toLocaleString()} fire${count === 1 ? "" : "s"} shown.`;
 }
 
-function showFirePopup(feature: maplibregl.MapGeoJSONFeature, lngLat: maplibregl.LngLat) {
+function showFirePopup(feature: MapGeoJSONFeature, lngLat: LngLat) {
   const date = getFireDateIso(feature) ?? "Unknown";
   const areaHa = getBurntAreaHa(feature);
   const country = getCountry(feature) ?? "Unknown";

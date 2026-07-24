@@ -2,7 +2,8 @@
 
 A MapLibre GL viewer for forest fires in Europe. Shows currently active fire
 perimeters by default, with a toggle to browse historical burnt areas by
-year.
+year. Rendered as a globe with a white basemap, black place-name labels, and
+red fire polygons — no other colour on the map.
 
 ## Data & basemap
 
