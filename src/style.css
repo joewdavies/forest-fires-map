@@ -1,0 +1,107 @@
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+#app {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+#toolbar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.5rem 1rem;
+  background: #1b1b1b;
+  color: #fff;
+  z-index: 1;
+}
+
+#toolbar h1 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+  white-space: nowrap;
+}
+
+#mode-toggle {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.mode-btn {
+  padding: 0.4rem 0.8rem;
+  border: 1px solid #555;
+  background: transparent;
+  color: #ddd;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.mode-btn.active {
+  background: #e25822;
+  border-color: #e25822;
+  color: #fff;
+}
+
+#year-select {
+  padding: 0.3rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid #555;
+  background: #2a2a2a;
+  color: #fff;
+}
+
+#status {
+  margin-left: auto;
+  font-size: 0.8rem;
+  color: #bbb;
+  min-height: 1em;
+}
+
+#status[data-state="error"] {
+  color: #ff8a65;
+}
+
+#map {
+  flex: 1;
+  position: relative;
+}
+
+#attribution {
+  padding: 0.25rem 1rem;
+  font-size: 0.7rem;
+  background: #1b1b1b;
+  color: #999;
+}
+
+#attribution a {
+  color: #ccc;
+}
+
+.fire-popup {
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.fire-popup dt {
+  font-weight: 600;
+  opacity: 0.7;
+}
+
+.fire-popup dd {
+  margin: 0 0 0.4rem;
+}

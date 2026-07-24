@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>European Forest Fires Map</title>
+  </head>
+  <body>
+    <div id="app">
+      <header id="toolbar">
+        <h1>European Forest Fires</h1>
+        <div id="mode-toggle" role="group" aria-label="Fire time range">
+          <button type="button" id="mode-current" class="mode-btn active" aria-pressed="true">
+            Current fires
+          </button>
+          <button type="button" id="mode-past" class="mode-btn" aria-pressed="false">
+            Past fires
+          </button>
+        </div>
+        <select id="year-select" hidden></select>
+        <span id="status" role="status"></span>
+      </header>
+      <div id="map"></div>
+      <footer id="attribution">
+        Data: <a href="https://forest-fire.emergency.copernicus.eu/" target="_blank" rel="noopener">EFFIS / Copernicus Emergency Management Service</a> ·
+        Basemap: <a href="https://openfreemap.org/" target="_blank" rel="noopener">OpenFreeMap</a>
+      </footer>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
