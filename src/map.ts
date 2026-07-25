@@ -193,6 +193,15 @@ export function setBasemap(map: Map, kind: BasemapKind, placeLabelsEnabled: bool
         const onLoad = async () => {
           map.off("error", onError);
           map.setProjection({ type: "globe" });
+          if (kind === "3d") {
+            map.setPitch(60);
+            map.setBearing(30);
+            map.dragRotate.enable();
+          } else {
+            map.setPitch(0);
+            map.setBearing(0);
+            map.dragRotate.disable();
+          }
           addCountryBorders(map);
           addBurntAreasLayers(map);
           addActiveFiresLayers(map);
