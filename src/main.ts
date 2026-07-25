@@ -602,20 +602,27 @@ function updateLegend() {
 
   // 2. Burnt areas / Past fires
   const burntAreasItem = document.getElementById("legend-item-burnt-areas");
+  const burntAreasImg = document.getElementById("legend-img-burnt-areas") as HTMLImageElement;
   if (burntAreasItem) {
     if (isCurrentMode) {
       burntAreasItem.style.display = burntAreasCheckbox.checked ? "flex" : "none";
-      const labelEl = burntAreasItem.querySelector("span[data-i18n]");
+      const labelEl = document.getElementById("legend-title-burnt-areas");
       if (labelEl) {
         labelEl.setAttribute("data-i18n", "burnt_areas");
         labelEl.textContent = t("burnt_areas");
       }
+      if (burntAreasImg) {
+        burntAreasImg.src = "/api/effis?service=WMS&request=GetLegendGraphic&layer=modis.ba.week&format=image/png";
+      }
     } else {
       burntAreasItem.style.display = "flex";
-      const labelEl = burntAreasItem.querySelector("span");
+      const labelEl = document.getElementById("legend-title-burnt-areas");
       if (labelEl) {
         labelEl.removeAttribute("data-i18n");
         labelEl.textContent = `${t("burnt_areas")} (${yearSelect.value})`;
+      }
+      if (burntAreasImg) {
+        burntAreasImg.src = "/api/effis?service=WMS&request=GetLegendGraphic&layer=ms:modis.ba.poly&format=image/png";
       }
     }
   }

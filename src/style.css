@@ -815,7 +815,7 @@ body {
   border-radius: 12px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   z-index: 10;
-  width: 200px;
+  width: 220px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -870,6 +870,28 @@ body {
 
 .legend-item {
   display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+}
+
+.legend-item h4 {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #fff;
+}
+
+.legend-item img {
+  max-width: 100%;
+  border-radius: 4px;
+  background: #fff;
+  padding: 4px;
+  box-sizing: border-box;
+}
+
+.legend-item-custom {
+  display: flex;
   align-items: center;
   gap: 0.5rem;
   font-size: 0.8rem;
@@ -884,17 +906,6 @@ body {
   justify-content: center;
   border-radius: 4px;
   flex-shrink: 0;
-}
-
-.symbol-active-fire {
-  background: #e25822;
-  border-radius: 50%;
-  border: 1px solid #ff7a45;
-}
-
-.symbol-burnt-area {
-  background: rgba(226, 88, 34, 0.4);
-  border: 1.5px solid #e25822;
 }
 
 .symbol-border {
