@@ -132,7 +132,18 @@ export function fetchHistoricalFires(year: number): Promise<FeatureCollection> {
 
 // --- Current fires: WMS raster tiles ---------------------------------
 
-const WMS_CURRENT_LAYER = "modis.ba";
+// `modis.ba` ("MODIS/SENTINEL2 (supervised)") is a full land-cover
+// classification, not a fire-only layer — most of its pixels are just
+// "vegetation" green rather than transparent, so it renders as solid green
+// tiles almost everywhere. `severity_time` ("FIRE SEVERITY, weekly
+// updated") is EFFIS's own dedicated burnt-area/severity layer, listed
+// under the same "BURNT AREAS" section in their production app — found the
+// same way as modis.ba, by inspecting that app's bundled JS. It lives on a
+// different backend mapfile, selected via the `map` query param below
+// (without it, MapServer falls back to the default mapfile, which doesn't
+// have this layer).
+const WMS_CURRENT_LAYER = "severity_time";
+const WMS_CURRENT_MAP_FILE = "/mnt/nfs/mapfiles/severity.map";
 
 // A syntactically-valid but never-real URL (RFC 2606 reserves .invalid for
 // exactly this) used as a MapLibre raster tile template. MapLibre
@@ -165,6 +176,7 @@ export function resolveEffisTileRequest(url: string): string | null {
   const [, z, x, y] = new URL(url).pathname.split("/").map(Number);
   const [minX, minY, maxX, maxY] = tileToBBox3857(z, x, y);
   const params = new URLSearchParams({
+    map: WMS_CURRENT_MAP_FILE,
     SERVICE: "WMS",
     REQUEST: "GetMap",
     VERSION: "1.3.0",

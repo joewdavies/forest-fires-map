@@ -48,22 +48,39 @@ interface (raster tiles). Across extensive testing, EFFIS's WFS endpoint —
 what this app originally used for *all* fire data — hung or errored on
 **every single request**, including EFFIS's own documented zero-parameter
 example, independent of query shape, filters, or field names; it is not a
-"we got the call wrong" problem. Its WMS endpoint (`GetMap` on the `modis.ba`
-layer), by contrast, responds successfully most of the time in 1-3 seconds —
-this is confirmed to be what EFFIS's *own* production viewer
-(`forest-fire.emergency.copernicus.eu/apps/effis.csv`) actually uses for the
-current-situation view, found by inspecting that app's own bundled JS. WMS
-still isn't perfectly reliable (EFFIS's backend overall seems to be under
-real strain, plausibly load from peak Mediterranean fire season), but it's
-dramatically better than WFS, which is why current fires moved to it. Past
-fires stay on WFS because no historical/date-filtered access path has been
-found to work reliably: neither `modis.ba.<year>` (WMTS, the pattern
-EFFIS's own viewer uses for past years) nor a `TIME=`-filtered WMS `GetMap`
-on `modis.ba` returned anything but a hang in testing — historical/temporal
-queries specifically seem to be the broken code path on EFFIS's backend,
-regardless of protocol. If EFFIS's WFS reliability ever improves, or a
-working historical WMS/WMTS pattern is found, `fetchHistoricalFires` is the
-place to swap it in.
+"we got the call wrong" problem. Its WMS endpoint, by contrast, responds
+successfully most of the time in 1-3 seconds — confirmed to be what EFFIS's
+*own* production viewer (`forest-fire.emergency.copernicus.eu/apps/effis.csv`)
+actually uses for the current-situation view, found by inspecting that app's
+own bundled JS. WMS still isn't perfectly reliable (EFFIS's backend overall
+seems to be under real strain, plausibly load from peak Mediterranean fire
+season, and goes through spells of failing *every* layer including this one
+— if current fires stop rendering, check whether EFFIS itself is down before
+assuming a code regression), but it's dramatically better than WFS, which is
+why current fires moved to it. Past fires stay on WFS because no
+historical/date-filtered access path has been found to work reliably:
+neither `modis.ba.<year>` (WMTS, the pattern EFFIS's own viewer uses for
+past years) nor a `TIME=`-filtered WMS `GetMap` returned anything but a hang
+in testing — historical/temporal queries specifically seem to be the broken
+code path on EFFIS's backend, regardless of protocol. If EFFIS's WFS
+reliability ever improves, or a working historical WMS/WMTS pattern is
+found, `fetchHistoricalFires` is the place to swap it in.
+
+**Which WMS layer, specifically, matters a lot.** The first working version
+of this used the `modis.ba` layer ("MODIS/SENTINEL2 (supervised)" in
+EFFIS's own UI) — it does respond, but it's a full land-cover
+*classification* raster, not a fire-only one: most pixels are just
+"vegetation" green rather than transparent, so it rendered as solid green
+tiles almost everywhere instead of highlighting fires. `WMS_CURRENT_LAYER`
+in `src/effis.ts` now uses `severity_time` ("FIRE SEVERITY, weekly updated")
+instead — EFFIS's own dedicated burn-severity layer, listed in the same
+"BURNT AREAS" section of their app as `modis.ba`, found the same way (their
+bundled JS). It needs an extra `map=/mnt/nfs/mapfiles/severity.map` query
+param (`WMS_CURRENT_MAP_FILE`) to select a non-default MapServer mapfile —
+without it the layer doesn't exist on the default one. If current fires
+ever look like uniform colour blocks again rather than fire-shaped patches,
+that's this same class of bug: check which WMS layer is actually being
+requested, not just whether the request succeeds.
 
 **Why the app never fetches EFFIS directly.** Both the WFS calls (past
 fires) and the WMS tile calls (current fires) go through the relative path
