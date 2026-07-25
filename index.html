@@ -48,52 +48,54 @@
         </div>
       </header>
       <div id="map">
-        <button
-          type="button"
-          id="layers-btn"
-          class="fab"
-          aria-haspopup="dialog"
-          aria-expanded="false"
-          aria-controls="layers-sheet"
-          data-i18n-aria-label="aria_map_layers"
-          aria-label="Map layers"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
-            <polyline points="2 17 12 22 22 17"></polyline>
-            <polyline points="2 12 12 17 22 12"></polyline>
-          </svg>
-        </button>
+        <div class="map-actions-group">
+          <button
+            type="button"
+            id="layers-btn"
+            class="fab"
+            aria-haspopup="dialog"
+            aria-expanded="false"
+            aria-controls="layers-sheet"
+            data-i18n-aria-label="aria_map_layers"
+            aria-label="Map layers"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+              <polyline points="2 17 12 22 22 17"></polyline>
+              <polyline points="2 12 12 17 22 12"></polyline>
+            </svg>
+          </button>
 
-        <button
-          type="button"
-          id="compass-btn"
-          class="fab"
-          data-i18n-aria-label="aria_compass"
-          aria-label="Reset orientation to North"
-        >
-          <svg id="compass-needle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polygon points="12 2 16 11 12 9 8 11" fill="#e25822" stroke="#e25822"></polygon>
-            <polygon points="12 22 16 13 12 15 8 13" fill="currentColor"></polygon>
-          </svg>
-        </button>
+          <button
+            type="button"
+            id="compass-btn"
+            class="fab"
+            data-i18n-aria-label="aria_compass"
+            aria-label="Reset orientation to North"
+          >
+            <svg id="compass-needle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="12 2 16 11 12 9 8 11" fill="#e25822" stroke="#e25822"></polygon>
+              <polygon points="12 22 16 13 12 15 8 13" fill="currentColor"></polygon>
+            </svg>
+          </button>
 
-        <button
-          type="button"
-          id="legend-btn"
-          class="fab"
-          data-i18n-aria-label="aria_legend"
-          aria-label="Map Legend"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="9" y1="6" x2="20" y2="6"></line>
-            <line x1="9" y1="12" x2="20" y2="12"></line>
-            <line x1="9" y1="18" x2="20" y2="18"></line>
-            <circle cx="4" cy="6" r="1.5"></circle>
-            <circle cx="4" cy="12" r="1.5"></circle>
-            <circle cx="4" cy="18" r="1.5"></circle>
-          </svg>
-        </button>
+          <button
+            type="button"
+            id="legend-btn"
+            class="fab"
+            data-i18n-aria-label="aria_legend"
+            aria-label="Map Legend"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="9" y1="6" x2="20" y2="6"></line>
+              <line x1="9" y1="12" x2="20" y2="12"></line>
+              <line x1="9" y1="18" x2="20" y2="18"></line>
+              <circle cx="4" cy="6" r="1.5"></circle>
+              <circle cx="4" cy="12" r="1.5"></circle>
+              <circle cx="4" cy="18" r="1.5"></circle>
+            </svg>
+          </button>
+        </div>
 
         <div id="search-container" class="search-container">
           <div class="search-input-wrapper">

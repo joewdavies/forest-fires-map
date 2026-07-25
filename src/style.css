@@ -93,10 +93,22 @@ body {
 /* Sits on the map itself, below the NavigationControl's zoom buttons
    (top-right, ~10px inset, ~58px tall) rather than bottom-right, which
    already holds the collapsed attribution control. */
-.fab {
+.map-actions-group {
   position: absolute;
   top: max(96px, calc(env(safe-area-inset-top) + 96px));
   right: max(10px, env(safe-area-inset-right));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 15;
+  pointer-events: none;
+}
+
+.map-actions-group .fab {
+  pointer-events: auto;
+}
+
+.fab {
   width: 44px;
   height: 44px;
   border: none;
@@ -116,11 +128,8 @@ body {
   .maplibregl-ctrl-group {
     display: none !important;
   }
-  .fab {
+  .map-actions-group {
     top: max(10px, calc(env(safe-area-inset-top) + 10px));
-  }
-  #compass-btn {
-    top: calc(max(10px, calc(env(safe-area-inset-top) + 10px)) + 54px);
   }
 }
 
@@ -160,7 +169,6 @@ body {
 }
 
 #compass-btn {
-  top: calc(max(96px, calc(env(safe-area-inset-top) + 96px)) + 54px);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.25s ease, transform 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
@@ -801,10 +809,6 @@ body {
 }
 
 /* ---------- Legend FAB & Card Styling ---------- */
-
-#legend-btn {
-  top: 204px; /* Below layers (96px) and compass (150px) */
-}
 
 .legend-card {
   position: absolute;
