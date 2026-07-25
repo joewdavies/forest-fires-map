@@ -8,6 +8,7 @@ import {
 } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { fetchCountryBorders } from "./borders";
+import { currentFiresTileTemplate, resolveEffisTileRequest } from "./effis";
 
 // maplibre-gl v6 builds its tile-parsing Web Worker URL dynamically at
 // runtime, which Vite can't statically analyze to bundle as an asset (the
@@ -20,6 +21,7 @@ setWorkerUrl("/maplibre-gl-worker.mjs");
 const OPENFREEMAP_STYLE = "https://tiles.openfreemap.org/styles/liberty";
 const BORDERS_SOURCE_ID = "country-borders";
 const BORDERS_LAYER_ID = "country-borders-line";
+export const CURRENT_FIRES_LAYER_ID = "current-fires-raster";
 
 // Roughly covers continental Europe, the Nordics, and the western Mediterranean.
 const EUROPE_BOUNDS: LngLatBoundsLike = [
@@ -33,12 +35,21 @@ export function createMap(container: HTMLElement): Map {
     style: OPENFREEMAP_STYLE,
     bounds: EUROPE_BOUNDS,
     fitBoundsOptions: { padding: 20 },
+    // Rewrites the placeholder tile URLs from currentFiresTileTemplate()
+    // (see effis.ts) into real EFFIS WMS GetMap requests. MapLibre has no
+    // native WMS/BBOX tile support, so this is the standard way to adapt a
+    // WMS endpoint into a raster tile source.
+    transformRequest: (url) => {
+      const resolved = resolveEffisTileRequest(url);
+      return resolved ? { url: resolved } : { url };
+    },
   });
 
   map.on("load", () => {
     map.setProjection({ type: "globe" });
     stripToPlaceLabelsOnly(map);
     addCountryBorders(map);
+    addCurrentFiresLayer(map);
   });
 
   map.addControl(new NavigationControl({ showCompass: false }), "top-right");
@@ -92,4 +103,26 @@ function addCountryBorders(map: Map): void {
   fetchCountryBorders()
     .then((data) => (map.getSource(BORDERS_SOURCE_ID) as GeoJSONSource).setData(data))
     .catch((err) => console.warn("Failed to load country borders:", err));
+}
+
+/** Adds the current-fires WMS raster overlay, visible by default (matching
+ * "Current fires" being the default mode — see main.ts), below the place
+ * labels but above the country borders. main.ts toggles its visibility
+ * when switching to/from "Past fires". */
+function addCurrentFiresLayer(map: Map): void {
+  const firstSymbolLayer = map.getStyle().layers.find((layer) => layer.type === "symbol");
+
+  map.addSource(CURRENT_FIRES_LAYER_ID, {
+    type: "raster",
+    tiles: [currentFiresTileTemplate()],
+    tileSize: 256,
+  });
+  map.addLayer(
+    {
+      id: CURRENT_FIRES_LAYER_ID,
+      type: "raster",
+      source: CURRENT_FIRES_LAYER_ID,
+    },
+    firstSymbolLayer?.id,
+  );
 }

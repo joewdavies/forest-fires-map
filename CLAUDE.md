@@ -23,28 +23,61 @@ There is no test suite or linter configured. Type-check with `npx tsc -b`
 
 ## Architecture
 
-**Data flow**: `src/effis.ts` fetches burnt-area polygons from EFFIS
-(European Forest Fire Information System) and hands GeoJSON to `src/main.ts`,
-which puts it on a single MapLibre `geojson` source (`fires`) rendered as a
-fill + outline layer. There is no backend/database — everything is
-client-fetched on demand.
+**Data flow**: there is no backend/database — everything is client-fetched
+on demand, but "Current fires" and "Past fires" are two structurally
+different pipelines feeding two independent, always-present map layers
+(toggled via `visibility`, not swapped in place — see
+`applyModeVisibility()` in `main.ts`):
 
-**One EFFIS layer serves both modes.** EFFIS's `ms:modis.ba.poly` WFS layer
-is a single, continuously-updated burnt-area database covering the current
-fire season *and* the full historical archive back to 2000. "Current fires"
-vs. "Past fires" is purely a date filter over the same layer — there's no
-separate "active fires" API. See `fetchCurrentFires()` (last 30 days) and
-`fetchHistoricalFires(year)` in `src/effis.ts`.
+- **Current fires** render as a **WMS raster tile overlay** (`modis.ba`
+  layer, added in `map.ts`'s `addCurrentFiresLayer()`). No fetch/parsing
+  code of ours is involved — MapLibre requests tiles on demand like any
+  raster source. `effis.ts`'s `resolveEffisTileRequest()` + `map.ts`'s
+  `transformRequest` adapt MapLibre's `{z}/{x}/{y}` tile grid into WMS
+  `GetMap` calls (MapLibre has no native WMS support, so this is the
+  standard adapter pattern — see the "EFFIS WFS vs WMS" note below for why
+  WMS specifically).
+- **Past fires** (by year) still use the original **WFS vector** pipeline:
+  `fetchHistoricalFires(year)` in `effis.ts` returns GeoJSON, which
+  `main.ts` puts on a `geojson` source (`fires`) rendered as a fill +
+  outline layer, clickable for a details popup.
 
-**Why the app never fetches EFFIS directly.** The frontend only ever calls
-the relative path `/api/effis`. In dev, `vite.config.ts` proxies that to
+**EFFIS WFS vs WMS: WFS does not work, in practice.** EFFIS exposes this
+burnt-area data through both a WFS interface (vector features) and a WMS/WMTS
+interface (raster tiles). Across extensive testing, EFFIS's WFS endpoint —
+what this app originally used for *all* fire data — hung or errored on
+**every single request**, including EFFIS's own documented zero-parameter
+example, independent of query shape, filters, or field names; it is not a
+"we got the call wrong" problem. Its WMS endpoint (`GetMap` on the `modis.ba`
+layer), by contrast, responds successfully most of the time in 1-3 seconds —
+this is confirmed to be what EFFIS's *own* production viewer
+(`forest-fire.emergency.copernicus.eu/apps/effis.csv`) actually uses for the
+current-situation view, found by inspecting that app's own bundled JS. WMS
+still isn't perfectly reliable (EFFIS's backend overall seems to be under
+real strain, plausibly load from peak Mediterranean fire season), but it's
+dramatically better than WFS, which is why current fires moved to it. Past
+fires stay on WFS because no historical/date-filtered access path has been
+found to work reliably: neither `modis.ba.<year>` (WMTS, the pattern
+EFFIS's own viewer uses for past years) nor a `TIME=`-filtered WMS `GetMap`
+on `modis.ba` returned anything but a hang in testing — historical/temporal
+queries specifically seem to be the broken code path on EFFIS's backend,
+regardless of protocol. If EFFIS's WFS reliability ever improves, or a
+working historical WMS/WMTS pattern is found, `fetchHistoricalFires` is the
+place to swap it in.
+
+**Why the app never fetches EFFIS directly.** Both the WFS calls (past
+fires) and the WMS tile calls (current fires) go through the relative path
+`/api/effis` — never straight to `maps.effis.emergency.copernicus.eu`. In
+dev, `vite.config.ts` proxies that to
 `https://maps.effis.emergency.copernicus.eu/effis`. In production, `api/effis.ts`
 is a Vercel Edge Function that forwards the request server-side — its path
 (`api/effis.ts`) maps directly to the `/api/effis` route Vercel serves, no
 rewrite rule needed. This exists because EFFIS's CORS support isn't
-guaranteed — going through a same-origin proxy sidesteps the question
-entirely rather than depending on it. Both proxy implementations must stay
-in sync if the upstream URL or query shape changes.
+guaranteed to stay open (it happens to be open today on both interfaces,
+confirmed by inspecting response headers, but going through a same-origin
+proxy sidesteps depending on that continuing to be true). Both proxy
+implementations must stay in sync if the upstream URL or query shape
+changes.
 
 **EFFIS's WFS response is a zipped shapefile, not GeoJSON**, and it must be
 requested as a raw buffer, not a URL string. `shpjs`'s `shp()` function only
@@ -154,7 +187,8 @@ update them on its own until the pre-scripts rerun.
 ## Key files
 
 - `src/map.ts` — MapLibre init, OpenFreeMap basemap reduced to white +
-  black-labels-only, globe projection, Europe bounds, GISCO country borders.
+  black-labels-only, globe projection, Europe bounds, GISCO country borders,
+  current-fires WMS raster layer + the `transformRequest` that powers it.
 - `src/effis.ts` — EFFIS fetch/parse/filter logic and property accessors.
 - `src/borders.ts` — fetches + converts the GISCO country-borders topojson.
 - `src/main.ts` — wires the map, the current/past toggle, year `<select>`,
@@ -166,13 +200,29 @@ update them on its own until the pre-scripts rerun.
 
 ## Known unknowns
 
-Live verification against EFFIS's real API was inconclusive during initial
-development — its backend was intermittently returning 500/502/503/403 or
-hanging outright across many independent tests (plausibly load-related,
-since this was tested during peak Mediterranean fire season). The WFS
-endpoint, layer name (`ms:modis.ba.poly`), and output format (`SHAPEZIP`)
-are taken from EFFIS's own published documentation, not guessed — but exact
-attribute field names/casing have not been confirmed against a live
-successful response. If you're debugging a data issue, check the network
-tab for the actual `feature.properties` shape before assuming the code is
-wrong.
+EFFIS's backend is generally under real strain (plausibly load from peak
+Mediterranean fire season) — even the WMS path used for current fires,
+while dramatically more reliable than WFS, is not 100% solid; expect
+occasional gaps in tile coverage rather than a hard error, since a single
+failed raster tile just doesn't render (no error UI, matching how the
+basemap's own raster layers already behave). If "Current fires" looks
+sparse, that may just be an accurate reflection of the fire situation
+rather than a loading failure — there's no easy way from the client side to
+distinguish "no fires here" from "this tile failed to load" for a raster
+overlay.
+
+WMS `GetFeatureInfo` (which would let users click a current-fire tile for
+details, mirroring the popup that already works for "Past fires") was
+tested and found unreliable — every `INFO_FORMAT` tried either hung or
+returned an "unsupported format" error, with no format found that actually
+returns data. It's not wired up for that reason; if EFFIS's service
+stabilizes, `resolveEffisTileRequest`'s WMS parameter pattern in
+`src/effis.ts` is the place to add a `GetFeatureInfo` variant.
+
+EFFIS's WFS field names/casing (used for "Past fires") were taken from
+EFFIS's own published documentation, not guessed, but have never been
+confirmed against a live successful response — every WFS request made
+during development hung or errored, including EFFIS's own documented
+zero-parameter example. If you're debugging a "Past fires" data issue,
+check the network tab for the actual `feature.properties` shape before
+assuming the code is wrong.

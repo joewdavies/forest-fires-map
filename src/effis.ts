@@ -1,11 +1,24 @@
 import type shp from "shpjs";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
 
-// EFFIS (European Forest Fire Information System) burnt-area WFS layer.
-// This single layer is continuously updated, so it covers both the current
-// fire season and the full historical archive — we distinguish "current"
-// vs "past" purely by filtering on fire date.
+// EFFIS (European Forest Fire Information System) burnt-area layer.
 // Docs: https://forest-fire.emergency.copernicus.eu/applications/data-and-services
+//
+// EFFIS exposes this data two ways, and in practice only one of them is
+// reliable: its WFS interface (vector polygons, used below for "Past
+// fires") has been observed hanging or erroring on *any* request — even
+// EFFIS's own documented example with zero extra parameters — regardless
+// of query shape. Its WMS interface (raster tiles, used in map.ts for
+// "Current fires" via the `modis.ba` layer) responds reliably in under a
+// couple of seconds and is what EFFIS's own production viewer
+// (forest-fire.emergency.copernicus.eu/apps/effis.csv) actually uses for
+// the current-situation view. So: current fires render as a WMS raster
+// overlay (see `WMS_CURRENT_LAYER` / map.ts's `transformRequest`), while
+// past fires still go through WFS below, since there's no per-year WMS
+// layer we've confirmed working (`modis.ba.<year>` WMTS and `TIME`-filtered
+// WMS both hang the same way WFS does — historical/date-filtered queries
+// specifically seem to be the broken code path on EFFIS's backend, not any
+// particular protocol).
 const EFFIS_PROXY = "/api/effis";
 const LAYER = "ms:modis.ba.poly";
 
@@ -108,13 +121,6 @@ async function fetchAndFilter(cqlFilter: string, matchesDate: (iso: string) => b
   }
 }
 
-export function fetchCurrentFires(daysBack = 30): Promise<FeatureCollection> {
-  const since = new Date();
-  since.setDate(since.getDate() - daysBack);
-  const sinceIso = since.toISOString().slice(0, 10);
-  return fetchAndFilter(`FIREDATE >= '${sinceIso}'`, (iso) => iso >= sinceIso);
-}
-
 export function fetchHistoricalFires(year: number): Promise<FeatureCollection> {
   const from = `${year}-01-01`;
   const to = `${year}-12-31`;
@@ -122,6 +128,56 @@ export function fetchHistoricalFires(year: number): Promise<FeatureCollection> {
     `FIREDATE >= '${from}' AND FIREDATE <= '${to}'`,
     (iso) => iso >= from && iso <= to,
   );
+}
+
+// --- Current fires: WMS raster tiles ---------------------------------
+
+const WMS_CURRENT_LAYER = "modis.ba";
+
+// A syntactically-valid but never-real URL (RFC 2606 reserves .invalid for
+// exactly this) used as a MapLibre raster tile template. MapLibre
+// substitutes {z}/{x}/{y} into it like any other tile URL; map.ts's
+// `transformRequest` recognises this host and rewrites the request into a
+// real WMS GetMap call before the browser ever fetches it — see
+// `resolveEffisTileRequest` below.
+const TILE_TEMPLATE_HOST = "https://effis-tile.invalid";
+
+export function currentFiresTileTemplate(): string {
+  return `${TILE_TEMPLATE_HOST}/{z}/{x}/{y}`;
+}
+
+const WEB_MERCATOR_ORIGIN_SHIFT = (2 * Math.PI * 6378137) / 2;
+
+function tileToBBox3857(z: number, x: number, y: number): [number, number, number, number] {
+  const tileSize = (WEB_MERCATOR_ORIGIN_SHIFT * 2) / 2 ** z;
+  const minX = -WEB_MERCATOR_ORIGIN_SHIFT + x * tileSize;
+  const maxX = -WEB_MERCATOR_ORIGIN_SHIFT + (x + 1) * tileSize;
+  const maxY = WEB_MERCATOR_ORIGIN_SHIFT - y * tileSize;
+  const minY = WEB_MERCATOR_ORIGIN_SHIFT - (y + 1) * tileSize;
+  return [minX, minY, maxX, maxY];
+}
+
+/** If `url` is one of our placeholder tile requests, returns the real WMS
+ * GetMap URL to fetch instead; otherwise returns null. */
+export function resolveEffisTileRequest(url: string): string | null {
+  if (!url.startsWith(TILE_TEMPLATE_HOST)) return null;
+
+  const [, z, x, y] = new URL(url).pathname.split("/").map(Number);
+  const [minX, minY, maxX, maxY] = tileToBBox3857(z, x, y);
+  const params = new URLSearchParams({
+    SERVICE: "WMS",
+    REQUEST: "GetMap",
+    VERSION: "1.3.0",
+    LAYERS: WMS_CURRENT_LAYER,
+    STYLES: "",
+    CRS: "EPSG:3857",
+    WIDTH: "256",
+    HEIGHT: "256",
+    FORMAT: "image/png",
+    TRANSPARENT: "true",
+    BBOX: [minX, minY, maxX, maxY].join(","),
+  });
+  return `${window.location.origin}${EFFIS_PROXY}?${params.toString()}`;
 }
 
 /** Minimal shape both geojson.Feature and MapLibre's MapGeoJSONFeature satisfy. */

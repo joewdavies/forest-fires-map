@@ -9,15 +9,19 @@ red fire polygons — no other colour on the map.
 
 - **Fire data**: [EFFIS](https://forest-fire.emergency.copernicus.eu/) (European
   Forest Fire Information System, EU Joint Research Centre / Copernicus
-  Emergency Management Service) — `ms:modis.ba.poly` WFS layer, a
-  continuously-updated burnt-area perimeter database covering both the
-  current fire season and the historical archive back to 2000.
+  Emergency Management Service). Current fires render as WMS raster tiles
+  (the `modis.ba` layer — the same one EFFIS's own production viewer uses);
+  past fires (by year) come from the `ms:modis.ba.poly` WFS vector layer.
+  EFFIS's WFS interface has proven very unreliable in practice, which is
+  why current fires use WMS instead — see CLAUDE.md for the full story.
+- **Country borders**: [GISCO](https://gisco-services.ec.europa.eu/) (Eurostat)
+  country boundary lines, converted from topojson client-side.
 - **Basemap**: [OpenFreeMap](https://openfreemap.org/) (Liberty style) — free
   vector tiles, no API key required.
 
-EFFIS's WFS endpoint is proxied (see `vite.config.ts` for dev, `api/effis.ts`
-for production) rather than called directly from the browser, since its
-CORS support isn't guaranteed.
+EFFIS's endpoints are proxied (see `vite.config.ts` for dev, `api/effis.ts`
+for production) rather than called directly from the browser, since their
+CORS support isn't guaranteed to stay open indefinitely.
 
 ## Develop
 

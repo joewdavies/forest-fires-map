@@ -1,16 +1,8 @@
 import "./style.css";
 import { Popup, type GeoJSONSource, type LngLat, type MapGeoJSONFeature, type MapLayerMouseEvent } from "maplibre-gl";
 import type { FeatureCollection } from "geojson";
-import { createMap } from "./map";
-import {
-  EffisError,
-  fetchCurrentFires,
-  fetchHistoricalFires,
-  getBurntAreaHa,
-  getCountry,
-  getFireDateIso,
-  getProvince,
-} from "./effis";
+import { createMap, CURRENT_FIRES_LAYER_ID } from "./map";
+import { EffisError, fetchHistoricalFires, getBurntAreaHa, getCountry, getFireDateIso, getProvince } from "./effis";
 
 const FIRE_SOURCE_ID = "fires";
 const FIRE_FILL_LAYER = "fires-fill";
@@ -61,6 +53,7 @@ map.on("load", () => {
     if (feature) showFirePopup(feature, e.lngLat);
   });
 
+  applyModeVisibility();
   loadFires();
 });
 
@@ -91,7 +84,20 @@ function setMode(next: Mode) {
   pastBtn.classList.toggle("active", mode === "past");
   pastBtn.setAttribute("aria-pressed", String(mode === "past"));
   yearSelect.hidden = mode !== "past";
+  applyModeVisibility();
   loadFires();
+}
+
+/** Shows the layer for the active mode and hides the other — the raster
+ * current-fires overlay (added in map.ts) and the vector past-fires layers
+ * are two independent, always-present layers rather than one shared source,
+ * since current fires render as WMS tiles and past fires as WFS vector
+ * polygons (see effis.ts for why). */
+function applyModeVisibility() {
+  map.setLayoutProperty(CURRENT_FIRES_LAYER_ID, "visibility", mode === "current" ? "visible" : "none");
+  const pastVisibility = mode === "past" ? "visible" : "none";
+  map.setLayoutProperty(FIRE_FILL_LAYER, "visibility", pastVisibility);
+  map.setLayoutProperty(FIRE_OUTLINE_LAYER, "visibility", pastVisibility);
 }
 
 function emptyCollection(): FeatureCollection {
@@ -105,15 +111,23 @@ function setStatus(message: string, state?: "error") {
 }
 
 async function loadFires() {
+  if (mode === "current") {
+    // No fetch needed — the raster layer loads its own tiles. EFFIS's WFS
+    // (used for "Past fires" below) has been unreliable enough that current
+    // fires render via WMS tiles instead; see effis.ts for why.
+    setStatus("Showing current fire perimeters (EFFIS Rapid Damage Assessment).");
+    return;
+  }
+
   const thisRequest = ++requestId;
   const source = map.getSource(FIRE_SOURCE_ID) as GeoJSONSource | undefined;
   if (!source) return;
 
   const year = yearSelect.value;
-  setStatus(mode === "current" ? "Loading current fires…" : `Loading ${year} fires…`);
+  setStatus(`Loading ${year} fires…`);
 
   try {
-    const data = mode === "current" ? await fetchCurrentFires() : await fetchHistoricalFires(Number(year));
+    const data = await fetchHistoricalFires(Number(year));
     if (thisRequest !== requestId) return; // superseded by a newer request
 
     source.setData(data);
@@ -126,11 +140,7 @@ async function loadFires() {
 }
 
 function describeResult(count: number, year: string): string {
-  if (count === 0) {
-    return mode === "current"
-      ? "No active fire perimeters reported in the last 30 days."
-      : `No burnt areas recorded for ${year}.`;
-  }
+  if (count === 0) return `No burnt areas recorded for ${year}.`;
   return `${count.toLocaleString()} fire${count === 1 ? "" : "s"} shown.`;
 }
 
