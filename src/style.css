@@ -106,6 +106,11 @@ body {
 #map {
   flex: 1;
   position: relative;
+  /* The globe's own surface is coloured via the style's "background" layer
+     (set to white in map.ts); this is what shows through behind/around the
+     sphere at low zoom — i.e. outer space — which MapLibre doesn't expose
+     a style property for. */
+  background-color: #000;
 }
 
 .fire-popup {

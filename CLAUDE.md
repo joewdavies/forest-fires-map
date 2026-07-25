@@ -171,13 +171,27 @@ request has since started (e.g. rapidly toggling Current/Past or changing
 the year). Don't remove this without another way to prevent race conditions
 between overlapping fetches.
 
-**Map styling is deliberately monochrome + red.** `stripToPlaceLabelsOnly()`
-in `src/map.ts` takes OpenFreeMap's full-colour Liberty style and, on every
-`load`, programmatically forces it down to a white background plus black
-place-name labels — everything else (roads, water, buildings, POI icons, the
-shaded-relief raster) gets `visibility: 'none'`. It walks `map.getStyle().layers`
-structurally (by `type` / `source-layer === 'place'`) rather than by hardcoded
-layer id, so it keeps working if Liberty's ~110-layer list changes upstream.
+**Map styling is deliberately monochrome + red — and applied before the map
+is ever constructed, not after.** `loadStrippedStyle()` in `src/map.ts`
+`fetch()`es OpenFreeMap's Liberty style JSON directly (rather than passing
+the style *URL* to `new Map()` and letting MapLibre fetch it), then
+`stripToPlaceLabelsOnly()` mutates that plain object down to a white
+background plus black place-name labels — everything else (roads, water,
+buildings, POI icons, the shaded-relief raster) gets `visibility: 'none'`
+— and `style.projection = { type: "globe" }` is set on the same object,
+all before that finished style object is handed to `new Map({ style,
+... })`. This ordering is the whole point: mutating a *live* map's paint/
+layout/projection only after its `load` event (the previous approach) means
+the original full-colour Mercator Liberty style renders for at least one
+frame first, then visibly snaps to white/globe — a flash. Pre-transforming
+the style object means the very first frame already looks right. The
+functions still walk `layers` structurally (by `type` /
+`source-layer === 'place'`) rather than by hardcoded layer id, so they keep
+working if Liberty's ~110-layer list changes upstream — that part is
+unchanged, only *when* it runs moved earlier. If this fetch fails,
+`loadStrippedStyle()` falls back to passing the plain style URL to
+`new Map()` (reintroducing the flash, but at least the map still loads).
+
 Past-fires polygons (added separately in `main.ts`) are red, by our own
 choice. The two current-fires WMS raster overlays are *not* controlled by
 us the same way — their colours (burn severity gradient, hotspot markers)
@@ -190,10 +204,13 @@ reintroduce any basemap colour (e.g. water), add a case to
 Liberty was chosen specifically so place-label layout/hierarchy could be
 kept as-is while everything else is stripped.
 
-**Globe projection requires the style to be loaded.** `map.setProjection({ type: "globe" })`
-throws ("Style is not done loading.") if called before the map's `load`
-event — hence it lives inside the same `load` handler as the style-stripping
-call, not immediately after `new Map(...)`.
+**`vite.config.ts` sets `build.target: "es2022"`.** `main.ts` does a
+top-level `await createMap(...)` (needed because `createMap` is now async —
+see above), and Vite/esbuild's default production target predates
+top-level-await support, so the plain default build fails with "Top-level
+await is not available in the configured target environment." es2022 is
+the first target with it. `npm run dev` was never affected (dev mode uses
+native ESM in the browser directly, no target-restricted transpilation).
 
 **Country borders are a separate GISCO overlay, not part of the basemap.**
 `addCountryBorders()` in `src/map.ts` fetches Eurostat GISCO's

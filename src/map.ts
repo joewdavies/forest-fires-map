@@ -33,10 +33,12 @@ const EUROPE_BOUNDS: LngLatBoundsLike = [
   [45, 72],
 ];
 
-export function createMap(container: HTMLElement): Map {
+type Style = ReturnType<Map["getStyle"]>;
+
+export async function createMap(container: HTMLElement): Promise<Map> {
   const map = new Map({
     container,
-    style: OPENFREEMAP_STYLE,
+    style: await loadStrippedStyle(),
     bounds: EUROPE_BOUNDS,
     fitBoundsOptions: { padding: 20 },
     // Rewrites the placeholder tile URLs from tileTemplate() (see effis.ts)
@@ -50,8 +52,6 @@ export function createMap(container: HTMLElement): Map {
   });
 
   map.on("load", () => {
-    map.setProjection({ type: "globe" });
-    stripToPlaceLabelsOnly(map);
     addCountryBorders(map);
     addBurntAreasLayer(map);
     addActiveFiresLayers(map);
@@ -64,24 +64,52 @@ export function createMap(container: HTMLElement): Map {
 }
 
 /**
- * Reduces OpenFreeMap's Liberty style to a white background plus black
- * place-name labels, so the fire polygons drawn on top (see main.ts) are the
- * only colour on the map. Works structurally (by layer type / source-layer)
- * rather than by layer id, so it isn't tied to Liberty's exact ~110-layer
- * list and keeps working if that list changes upstream.
+ * Fetches OpenFreeMap's Liberty style and reduces it to a white background
+ * plus black place-name labels — with globe projection baked in — before
+ * the Map is ever constructed, so the first frame already looks right.
+ * Doing this at runtime instead (setPaintProperty/setLayoutProperty/
+ * setProjection inside a `load` handler, as this used to work) requires the
+ * style to render at least once first, which flashes the original
+ * full-colour Mercator Liberty style before snapping to white/globe.
+ *
+ * Falls back to the plain style URL (letting MapLibre fetch it itself, with
+ * that flash reintroduced) if this fetch fails — better than the map not
+ * loading at all over a transient network hiccup.
  */
-function stripToPlaceLabelsOnly(map: Map): void {
-  for (const layer of map.getStyle().layers) {
+async function loadStrippedStyle(): Promise<Style | string> {
+  let style: Style;
+  try {
+    style = (await (await fetch(OPENFREEMAP_STYLE)).json()) as Style;
+  } catch (err) {
+    console.warn("Failed to pre-fetch basemap style, falling back to default load path:", err);
+    return OPENFREEMAP_STYLE;
+  }
+
+  style.projection = { type: "globe" };
+  stripToPlaceLabelsOnly(style);
+  return style;
+}
+
+/**
+ * Reduces a Liberty style object to a white background plus black
+ * place-name labels, so the fire polygons/tiles drawn on top (see main.ts
+ * and the WMS raster layers below) are the only colour on the map. Works
+ * structurally (by layer type / source-layer) rather than by layer id, so
+ * it isn't tied to Liberty's exact ~110-layer list and keeps working if
+ * that list changes upstream. Mutates `style.layers` in place.
+ */
+function stripToPlaceLabelsOnly(style: Style): void {
+  for (const layer of style.layers) {
     if (layer.type === "background") {
-      map.setPaintProperty(layer.id, "background-color", "#ffffff");
+      layer.paint = { ...layer.paint, "background-color": "#ffffff" };
     } else if (layer.type === "symbol" && layer["source-layer"] === "place") {
       // Place-name labels (country/state/city/town/village) — keep their
       // existing layout/hierarchy/halo as-is, just force the text black.
-      map.setPaintProperty(layer.id, "text-color", "#000000");
+      layer.paint = { ...layer.paint, "text-color": "#000000" };
     } else {
       // Everything else — roads, water, buildings, parks, POI icons, the
       // shaded-relief raster, non-place labels — is hidden.
-      map.setLayoutProperty(layer.id, "visibility", "none");
+      layer.layout = { ...layer.layout, visibility: "none" };
     }
   }
 }

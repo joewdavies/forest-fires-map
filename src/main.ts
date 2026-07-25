@@ -25,7 +25,7 @@ let requestId = 0;
 
 populateYearSelect();
 
-const map = createMap(mapContainer);
+const map = await createMap(mapContainer);
 const popup = new Popup({ closeButton: true, closeOnClick: true, maxWidth: "280px" });
 
 map.on("load", () => {

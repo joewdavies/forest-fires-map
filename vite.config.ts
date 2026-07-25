@@ -5,6 +5,12 @@ import { defineConfig } from "vite";
 // always requests same-origin and never has to deal with EFFIS's CORS
 // policy directly.
 export default defineConfig({
+  // main.ts uses a top-level `await createMap(...)` (see map.ts — the
+  // basemap style is fetched and stripped to white/globe *before* the Map
+  // is constructed, to avoid a flash of the full-colour Mercator style).
+  // Vite/esbuild's default production target predates top-level await
+  // support; es2022 is the first target that has it.
+  build: { target: "es2022" },
   server: {
     proxy: {
       "/api/effis": {
