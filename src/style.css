@@ -673,6 +673,10 @@ body {
     align-items: center;
     justify-content: center;
   }
+
+  .search-container:not(.expanded) .map-loading-indicator {
+    right: 11px;
+  }
 }
 
 /* ---------- Language Dropdown Button ---------- */
