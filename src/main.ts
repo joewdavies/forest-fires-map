@@ -154,6 +154,7 @@ function openSheet() {
 function closeSheet() {
   sheetBackdrop.classList.remove("open");
   layersSheet.classList.remove("open");
+  layersSheet.style.transform = "";
   layersSheet.setAttribute("inert", "");
   layersBtn.setAttribute("aria-expanded", "false");
   layersSheet.addEventListener(
@@ -165,6 +166,54 @@ function closeSheet() {
     { once: true },
   );
 }
+
+// --- Mobile Swipe Down Gesture for Layers Sheet --------------------
+
+let sheetStartY = 0;
+let sheetCurrentY = 0;
+let sheetIsDragging = false;
+
+layersSheet.addEventListener("touchstart", (e) => {
+  const touch = e.touches[0];
+  const target = e.target as HTMLElement;
+  const isHandle = target.classList.contains("sheet-handle") || target.closest(".sheet-handle");
+  const isHeader = target.classList.contains("sheet-header") || target.closest(".sheet-header");
+  const contentEl = layersSheet.querySelector(".sheet-content") as HTMLElement;
+  const isContentAtTop = contentEl ? contentEl.scrollTop === 0 : true;
+
+  if (isHandle || isHeader || isContentAtTop) {
+    sheetStartY = touch.clientY;
+    sheetCurrentY = touch.clientY;
+    sheetIsDragging = true;
+    layersSheet.style.transition = "none";
+  }
+}, { passive: true });
+
+layersSheet.addEventListener("touchmove", (e) => {
+  if (!sheetIsDragging) return;
+  const touch = e.touches[0];
+  sheetCurrentY = touch.clientY;
+  const deltaY = sheetCurrentY - sheetStartY;
+
+  if (deltaY > 0) {
+    layersSheet.style.transform = `translateY(${deltaY}px)`;
+  }
+}, { passive: true });
+
+layersSheet.addEventListener("touchend", () => {
+  if (!sheetIsDragging) return;
+  sheetIsDragging = false;
+  layersSheet.style.transition = "";
+
+  const deltaY = sheetCurrentY - sheetStartY;
+  if (deltaY > 80) {
+    closeSheet();
+  } else {
+    layersSheet.style.transform = "";
+  }
+  sheetStartY = 0;
+  sheetCurrentY = 0;
+});
 
 function addFireLayer(map: MaplibreMap): void {
   map.addSource(FIRE_SOURCE_ID, { type: "geojson", data: emptyCollection() });
