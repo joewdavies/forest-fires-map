@@ -63,6 +63,10 @@ const langBtn = document.getElementById("lang-btn") as HTMLButtonElement;
 const langMenu = document.getElementById("lang-menu") as HTMLElement;
 const langOptions = document.querySelectorAll(".lang-option") as NodeListOf<HTMLButtonElement>;
 
+const aboutBtn = document.getElementById("about-btn") as HTMLButtonElement;
+const aboutModal = document.getElementById("about-modal") as HTMLElement;
+const aboutCloseBtn = document.getElementById("about-close") as HTMLButtonElement;
+
 let mode: Mode = "current";
 let requestId = 0;
 let currentBasemap: BasemapKind = "plain";
@@ -473,5 +477,45 @@ document.addEventListener("click", (e) => {
   if (!langMenu.hidden && !langBtn.contains(e.target as Node) && !langMenu.contains(e.target as Node)) {
     langMenu.hidden = true;
     langBtn.classList.remove("active");
+  }
+});
+
+// --- About Modal Logic ---------------------------------------------
+
+aboutBtn.addEventListener("click", () => {
+  sheetBackdrop.hidden = false;
+  aboutModal.hidden = false;
+  aboutModal.removeAttribute("inert");
+  requestAnimationFrame(() => {
+    sheetBackdrop.classList.add("open");
+    aboutModal.classList.add("open");
+  });
+});
+
+function closeAboutModal() {
+  sheetBackdrop.classList.remove("open");
+  aboutModal.classList.remove("open");
+  aboutModal.setAttribute("inert", "");
+  aboutModal.addEventListener(
+    "transitionend",
+    () => {
+      sheetBackdrop.hidden = true;
+      aboutModal.hidden = true;
+    },
+    { once: true }
+  );
+}
+
+aboutCloseBtn.addEventListener("click", closeAboutModal);
+
+sheetBackdrop.addEventListener("click", () => {
+  if (!aboutModal.hidden) {
+    closeAboutModal();
+  }
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !aboutModal.hidden) {
+    closeAboutModal();
   }
 });

@@ -10,26 +10,41 @@
       <header id="toolbar">
         <h1 data-i18n="header_title">Forest Fires Map</h1>
         <span id="status" role="status"></span>
-        <div class="lang-container">
+        <div class="toolbar-actions">
+          <div class="lang-container">
+            <button
+              type="button"
+              id="lang-btn"
+              class="lang-btn"
+              data-i18n-aria-label="aria_change_language"
+              aria-label="Change language"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="2" y1="12" x2="22" y2="12"></line>
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+              </svg>
+            </button>
+            <div id="lang-menu" class="lang-menu" hidden>
+              <button type="button" class="lang-option" data-lang="en">English</button>
+              <button type="button" class="lang-option" data-lang="es">Español</button>
+              <button type="button" class="lang-option" data-lang="de">Deutsch</button>
+              <button type="button" class="lang-option" data-lang="fr">Français</button>
+            </div>
+          </div>
           <button
             type="button"
-            id="lang-btn"
-            class="lang-btn"
-            data-i18n-aria-label="aria_change_language"
-            aria-label="Change language"
+            id="about-btn"
+            class="about-btn"
+            data-i18n-aria-label="aria_about"
+            aria-label="About the app"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="12" cy="12" r="10"></circle>
-              <line x1="2" y1="12" x2="22" y2="12"></line>
-              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+              <line x1="12" y1="16" x2="12" y2="12"></line>
+              <line x1="12" y1="8" x2="12.01" y2="8"></line>
             </svg>
           </button>
-          <div id="lang-menu" class="lang-menu" hidden>
-            <button type="button" class="lang-option" data-lang="en">English</button>
-            <button type="button" class="lang-option" data-lang="es">Español</button>
-            <button type="button" class="lang-option" data-lang="de">Deutsch</button>
-            <button type="button" class="lang-option" data-lang="fr">Français</button>
-          </div>
         </div>
       </header>
       <div id="map">
@@ -81,6 +96,14 @@
           </div>
           <ul id="search-results" class="search-results" hidden></ul>
         </div>
+      </div>
+
+      <div id="about-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="about-title" hidden inert>
+        <div class="modal-header">
+          <h2 id="about-title" data-i18n="about_title">About Forest Fires Map</h2>
+          <button type="button" id="about-close" class="icon-btn" data-i18n-aria-label="aria_close" aria-label="Close">&times;</button>
+        </div>
+        <div class="modal-body" data-i18n="about_content_html"></div>
       </div>
 
       <div id="sheet-backdrop" hidden></div>
