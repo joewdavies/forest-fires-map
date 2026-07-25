@@ -103,20 +103,49 @@ throws ("Style is not done loading.") if called before the map's `load`
 event — hence it lives inside the same `load` handler as the style-stripping
 call, not immediately after `new Map(...)`.
 
+**Country borders are a separate GISCO overlay, not part of the basemap.**
+`addCountryBorders()` in `src/map.ts` fetches Eurostat GISCO's
+`CNTR_BN_20M_2024_4326` topojson (country borders + coastlines as
+LineStrings — combined they trace each country's full outline), converts it
+to GeoJSON client-side with `topojson-client`, and adds it as a black line
+layer positioned *below* the first symbol layer (so place-name text stays
+legible on top of border lines, via the `beforeId` argument to
+`addLayer`). CORS is wide open on that endpoint, so no proxy is needed.
+
 ## Gotchas
 
-**Vite dev server + maplibre-gl v6: exclude it from dependency
-pre-bundling.** Without `optimizeDeps.exclude: ["maplibre-gl"]` in
-`vite.config.ts`, the map silently never finishes loading in dev — no
-console error, `map.on('load', ...)` never fires, `isStyleLoaded()` stays
-`false` forever. Cause: maplibre-gl v6 ships a separate Web Worker file for
-tile parsing; Vite's dependency optimizer mishandles that extra entry point,
-so the worker 404s from `node_modules/.vite/deps/maplibre-gl-worker.mjs` and
-vector tiles can never be parsed. Background/raster layers (which don't need
-the worker) render fine, which makes this look like a partial-success state
-rather than the total blocker it is — if the map ever regresses to
-"basemap looks empty/frozen, no JS errors," check this first before
-suspecting the style-stripping logic.
+**maplibre-gl v6's Web Worker breaks under Vite in both dev *and*
+production — this is the one that will bite you hardest.** The map gets
+stuck permanently: `map.on('load', ...)` never fires, the basemap looks like
+unstyled Liberty (coloured, no place labels, no white background), and no
+fires ever render — with **zero console errors**, because the failure
+happens inside the worker, not the main thread. `src/map.ts` calls
+`setWorkerUrl("/maplibre-gl-worker.mjs")` at module load, pointing at a
+static copy served from `public/` (kept in sync by
+`scripts/copy-maplibre-worker.mjs`, run via the `predev`/`prebuild` npm
+scripts) — **both `maplibre-gl-worker.mjs` and its sibling
+`maplibre-gl-shared.mjs` must be copied together**, since the worker
+`import`s the shared chunk by a relative path resolved against wherever the
+worker script is served from. Copying only the worker file looks like it
+works (the worker *is* created — check via `page.on('worker', ...)` in a
+Playwright script) but it 404s on the shared-chunk import and the worker
+dies silently within milliseconds of creation.
+
+Root cause: maplibre-gl v6 builds its worker URL dynamically at runtime
+(`new URL(`./${name}`, import.meta.url)` with a runtime-computed `name`),
+which bundlers can only special-case for a *static* string literal — so
+Vite never knows to bundle the worker (or its shared chunk) as assets in
+`vite build`, and separately mishandles it in dev's dependency pre-bundler
+(`node_modules/.vite/deps/maplibre-gl-worker.mjs` 404s; harmless-looking
+console warning, easy to miss). `vite.config.ts`'s
+`optimizeDeps.exclude: ["maplibre-gl"]` fixes the dev-only symptom but does
+nothing for production — the `setWorkerUrl` + static-copy fix above is the
+one that actually matters and covers both.
+
+If you ever bump `maplibre-gl`, rerun `npm run copy-maplibre-worker` (or
+just `npm run build`/`npm run dev`, which do it automatically) — the copied
+files aren't tracked by npm's dependency resolution, so an upgrade won't
+update them on its own until the pre-scripts rerun.
 
 **`maplibre-gl` v6 has no default export.** `import maplibregl from
 "maplibre-gl"` (the v4-era pattern) fails to compile — use named imports
@@ -125,12 +154,15 @@ suspecting the style-stripping logic.
 ## Key files
 
 - `src/map.ts` — MapLibre init, OpenFreeMap basemap reduced to white +
-  black-labels-only, globe projection, Europe bounds.
+  black-labels-only, globe projection, Europe bounds, GISCO country borders.
 - `src/effis.ts` — EFFIS fetch/parse/filter logic and property accessors.
+- `src/borders.ts` — fetches + converts the GISCO country-borders topojson.
 - `src/main.ts` — wires the map, the current/past toggle, year `<select>`,
   and click-to-popup behavior together.
 - `api/effis.ts` (Vercel Edge Function) + `vite.config.ts` (`server.proxy`)
   — the two proxy implementations that must stay behaviorally equivalent.
+- `scripts/copy-maplibre-worker.mjs` + `public/` — see the Web Worker
+  gotcha above.
 
 ## Known unknowns
 
