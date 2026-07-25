@@ -95,7 +95,7 @@ body {
    already holds the collapsed attribution control. */
 .fab {
   position: absolute;
-  top: max(80px, calc(env(safe-area-inset-top) + 80px));
+  top: max(96px, calc(env(safe-area-inset-top) + 96px));
   right: max(10px, env(safe-area-inset-right));
   width: 44px;
   height: 44px;
@@ -160,7 +160,7 @@ body {
 }
 
 #compass-btn {
-  top: calc(max(80px, calc(env(safe-area-inset-top) + 80px)) + 54px);
+  top: calc(max(96px, calc(env(safe-area-inset-top) + 96px)) + 54px);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.25s ease, transform 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
