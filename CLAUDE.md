@@ -315,3 +315,25 @@ during development hung or errored, including EFFIS's own documented
 zero-parameter example. If you're debugging a "Past fires" data issue,
 check the network tab for the actual `feature.properties` shape before
 assuming the code is wrong.
+
+**Requests through the production proxy have been observed hanging even
+when EFFIS itself is fine.** Diagnosing a spell of all-layers-503/504 in
+production (2026-07-25): the exact same WMS `GetMap` request that hung
+through `api/effis.ts` until Vercel killed the function (~25s,
+`FUNCTION_INVOCATION_TIMEOUT`) succeeded in 2-6s when sent directly to
+`maps.effis.emergency.copernicus.eu`, repeatably, for both a normally-working
+layer (`severity_time`) and a bare `GetCapabilities` call. So this failure
+mode is distinct from EFFIS's general backend strain described above — it's
+specific to requests routed through the Vercel Edge Function's network path,
+not EFFIS being slow or down for everyone. The likely cause is EFFIS's
+AWS-fronted WAF/rate-limiter reacting to Vercel's shared edge egress IPs
+(plausibly tripped by the burst of parallel tile requests a single pan/zoom
+generates, all from the same source IP), rather than a permanent block,
+since the WAF is already known to react defensively to other traffic shapes
+(see the `cql_filter` note above). `api/effis.ts` now applies its own
+`AbortSignal.timeout` (15s) to this fetch so a hang fails fast with a clean
+504 instead of silently eating Vercel's full function timeout — this makes
+failures faster and cleaner, not less frequent. If current fires are down
+in production but a direct `curl` to EFFIS's WMS endpoint succeeds, this is
+almost certainly what's happening; there's no client-side fix for it, since
+it's about which network the request originates from.
