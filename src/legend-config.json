@@ -13,7 +13,8 @@
   },
   "burntAreas": {
     "colors": [
-      {"color": "rgba(226, 88, 34, 0.4)", "borderColor": "#e25822", "label": "Burnt Area"}
+      {"color": "#FD7F7F", "borderColor": "#800000", "label": "last 1 day"},
+      {"color": "#FDBE7F", "borderColor": "#C07F00", "label": "last 7 days"}
     ]
   }
 }
