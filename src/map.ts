@@ -162,6 +162,9 @@ async function styleForBasemap(kind: BasemapKind): Promise<Style | string> {
   if (kind === "plain") {
     return loadStrippedStyle();
   }
+  if (kind === "3d") {
+    return "https://tiles.openfreemap.org/styles/liberty";
+  }
   return `https://tiles.openfreemap.org/styles/${kind}`;
 }
 
