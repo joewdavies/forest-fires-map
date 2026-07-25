@@ -85,6 +85,23 @@
 
           <button
             type="button"
+            id="measure-btn"
+            class="fab"
+            aria-pressed="false"
+            data-i18n-aria-label="aria_measure_distance"
+            aria-label="Measure distance"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="7" width="20" height="10" rx="2"></rect>
+              <line x1="6" y1="7" x2="6" y2="11"></line>
+              <line x1="10" y1="7" x2="10" y2="13"></line>
+              <line x1="14" y1="7" x2="14" y2="11"></line>
+              <line x1="18" y1="7" x2="18" y2="13"></line>
+            </svg>
+          </button>
+
+          <button
+            type="button"
             id="compass-btn"
             class="fab"
             data-i18n-aria-label="aria_compass"
@@ -95,6 +112,11 @@
               <polygon points="12 22 16 13 12 15 8 13" fill="currentColor"></polygon>
             </svg>
           </button>
+        </div>
+
+        <div id="measure-tooltip" class="measure-tooltip" role="status" hidden>
+          <span id="measure-tooltip-text" data-i18n="measure_choose_start">Click the map to choose a starting point</span>
+          <button type="button" id="measure-close" data-i18n-aria-label="aria_close" aria-label="Close">&times;</button>
         </div>
 
         <div id="search-container" class="search-container">

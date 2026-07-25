@@ -40,6 +40,9 @@ import {
 const FIRE_SOURCE_ID = "fires";
 const FIRE_FILL_LAYER = "fires-fill";
 const FIRE_OUTLINE_LAYER = "fires-outline";
+const MEASURE_SOURCE_ID = "distance-measurement";
+const MEASURE_LINE_LAYER_ID = "distance-measurement-line";
+const MEASURE_POINT_LAYER_ID = "distance-measurement-points";
 const EARLIEST_YEAR = 2000;
 
 type Mode = "current" | "past";
@@ -73,6 +76,18 @@ const compassBtn = document.getElementById("compass-btn") as HTMLButtonElement;
 const compassNeedle = document.getElementById(
   "compass-needle",
 ) as SVGElement | null;
+const measureBtn = document.getElementById(
+  "measure-btn",
+) as HTMLButtonElement;
+const measureTooltip = document.getElementById(
+  "measure-tooltip",
+) as HTMLElement;
+const measureTooltipText = document.getElementById(
+  "measure-tooltip-text",
+) as HTMLElement;
+const measureCloseBtn = document.getElementById(
+  "measure-close",
+) as HTMLButtonElement;
 
 const searchContainer = document.getElementById(
   "search-container",
@@ -121,6 +136,10 @@ let mode: Mode = "current";
 let requestId = 0;
 let currentBasemap: BasemapKind =
   (config.defaultBasemap as BasemapKind) || "plain";
+let measurementActive = false;
+let measurementStart: LngLat | null = null;
+let measurementEnd: LngLat | null = null;
+let measurementPreview: LngLat | null = null;
 
 populateYearSelect();
 
@@ -162,14 +181,16 @@ for (const option of basemapOptions) {
 
 map.on("load", () => {
   addFireLayer(map);
+  addMeasurementLayers();
 
   map.on("mouseenter", FIRE_FILL_LAYER, () => {
-    map.getCanvas().style.cursor = "pointer";
+    if (!measurementActive) map.getCanvas().style.cursor = "pointer";
   });
   map.on("mouseleave", FIRE_FILL_LAYER, () => {
     map.getCanvas().style.cursor = "";
   });
   map.on("click", FIRE_FILL_LAYER, (e: MapLayerMouseEvent) => {
+    if (measurementActive) return;
     const feature = e.features?.[0];
     if (feature) showFirePopup(feature, e.lngLat);
   });
@@ -220,6 +241,42 @@ compassBtn.addEventListener("click", () => {
   map.resetNorthPitch();
 });
 
+measureBtn.addEventListener("click", () => {
+  if (measurementActive) {
+    stopMeasurement();
+  } else {
+    startMeasurement();
+  }
+});
+measureCloseBtn.addEventListener("click", stopMeasurement);
+
+map.on("click", (e) => {
+  if (!measurementActive) return;
+
+  if (!measurementStart || measurementEnd) {
+    measurementStart = e.lngLat;
+    measurementEnd = null;
+    measurementPreview = null;
+    measureTooltipText.textContent = t("measure_choose_end");
+  } else {
+    measurementEnd = e.lngLat;
+    measurementPreview = null;
+    updateMeasurementTooltip(measurementStart, measurementEnd);
+  }
+  updateMeasurementData();
+});
+
+map.on("mousemove", (e) => {
+  if (!measurementActive || !measurementStart || measurementEnd) return;
+  measurementPreview = e.lngLat;
+  updateMeasurementData();
+  updateMeasurementTooltip(measurementStart, measurementPreview);
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && measurementActive) stopMeasurement();
+});
+
 map.on("rotate", updateCompass);
 map.on("load", updateCompass);
 
@@ -233,6 +290,142 @@ function updateCompass() {
   } else {
     compassBtn.classList.remove("visible");
   }
+}
+
+function startMeasurement(): void {
+  measurementActive = true;
+  measurementStart = null;
+  measurementEnd = null;
+  measurementPreview = null;
+  measureBtn.classList.add("active");
+  measureBtn.setAttribute("aria-pressed", "true");
+  mapContainer.classList.add("measuring");
+  measureTooltip.hidden = false;
+  measureTooltipText.textContent = t("measure_choose_start");
+  popup.remove();
+  updateMeasurementData();
+}
+
+function stopMeasurement(): void {
+  measurementActive = false;
+  measurementStart = null;
+  measurementEnd = null;
+  measurementPreview = null;
+  measureBtn.classList.remove("active");
+  measureBtn.setAttribute("aria-pressed", "false");
+  mapContainer.classList.remove("measuring");
+  measureTooltip.hidden = true;
+  updateMeasurementData();
+}
+
+function addMeasurementLayers(): void {
+  if (!map.getSource(MEASURE_SOURCE_ID)) {
+    map.addSource(MEASURE_SOURCE_ID, {
+      type: "geojson",
+      data: measurementCollection(),
+    });
+  }
+  if (!map.getLayer(MEASURE_LINE_LAYER_ID)) {
+    map.addLayer({
+      id: MEASURE_LINE_LAYER_ID,
+      type: "line",
+      source: MEASURE_SOURCE_ID,
+      filter: ["==", ["geometry-type"], "LineString"],
+      paint: {
+        "line-color": "#e25822",
+        "line-width": 3,
+        "line-dasharray": [2, 1],
+      },
+    });
+  }
+  if (!map.getLayer(MEASURE_POINT_LAYER_ID)) {
+    map.addLayer({
+      id: MEASURE_POINT_LAYER_ID,
+      type: "circle",
+      source: MEASURE_SOURCE_ID,
+      filter: ["==", ["geometry-type"], "Point"],
+      paint: {
+        "circle-radius": 6,
+        "circle-color": "#fff",
+        "circle-stroke-color": "#e25822",
+        "circle-stroke-width": 3,
+      },
+    });
+  }
+}
+
+function measurementCollection(): FeatureCollection {
+  const points = [measurementStart, measurementEnd].filter(
+    (point): point is LngLat => point !== null,
+  );
+  const lineEnd = measurementEnd ?? measurementPreview;
+  const features: FeatureCollection["features"] = points.map((point) => ({
+    type: "Feature",
+    properties: {},
+    geometry: { type: "Point", coordinates: [point.lng, point.lat] },
+  }));
+
+  if (measurementStart && lineEnd) {
+    features.unshift({
+      type: "Feature",
+      properties: {},
+      geometry: {
+        type: "LineString",
+        coordinates: [
+          [measurementStart.lng, measurementStart.lat],
+          [lineEnd.lng, lineEnd.lat],
+        ],
+      },
+    });
+  }
+  return { type: "FeatureCollection", features };
+}
+
+function updateMeasurementData(): void {
+  const source = map.getSource(MEASURE_SOURCE_ID) as GeoJSONSource | undefined;
+  source?.setData(measurementCollection());
+}
+
+function updateMeasurementTooltip(start: LngLat, end: LngLat): void {
+  measureTooltipText.textContent = t("measure_distance", {
+    distance: formatDistance(distanceInMetres(start, end)),
+  });
+}
+
+function refreshMeasurementTooltip(): void {
+  if (!measurementActive) return;
+  const lineEnd = measurementEnd ?? measurementPreview;
+  if (measurementStart && lineEnd) {
+    updateMeasurementTooltip(measurementStart, lineEnd);
+  } else {
+    measureTooltipText.textContent = t(
+      measurementStart ? "measure_choose_end" : "measure_choose_start",
+    );
+  }
+}
+
+function distanceInMetres(start: LngLat, end: LngLat): number {
+  const radians = Math.PI / 180;
+  const lat1 = start.lat * radians;
+  const lat2 = end.lat * radians;
+  const deltaLat = (end.lat - start.lat) * radians;
+  const deltaLng = (end.lng - start.lng) * radians;
+  const a =
+    Math.sin(deltaLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLng / 2) ** 2;
+  return 6371008.8 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function formatDistance(metres: number): string {
+  const locale = getLanguage();
+  if (metres < 1000) {
+    return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(metres)} m`;
+  }
+  const kilometres = metres / 1000;
+  return `${new Intl.NumberFormat(locale, {
+    minimumFractionDigits: kilometres < 10 ? 2 : 1,
+    maximumFractionDigits: kilometres < 10 ? 2 : 1,
+  }).format(kilometres)} km`;
 }
 
 function openSheet() {
@@ -360,6 +553,8 @@ async function handleBasemapChange(kind: BasemapKind) {
   }
 
   addFireLayer(map);
+  addMeasurementLayers();
+  updateMeasurementData();
   setPastFiresYear(map, Number(yearSelect.value));
   applyModeVisibility();
   setPlaceLabelsVisible(map, placeLabelsCheckbox.checked);
@@ -628,6 +823,7 @@ for (const option of langOptions) {
     if (lang !== getLanguage()) {
       setLanguage(lang);
       updateActiveLanguageOption();
+      refreshMeasurementTooltip();
       loadFires();
       updateLegend();
     }

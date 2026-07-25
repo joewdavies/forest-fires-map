@@ -190,9 +190,59 @@ body {
   transform: scale(0.95);
 }
 
+.fab.active {
+  background: #e25822;
+  color: #fff;
+}
+
 .fab svg {
   width: 22px;
   height: 22px;
+}
+
+.measure-tooltip {
+  position: absolute;
+  left: 50%;
+  bottom: max(38px, calc(env(safe-area-inset-bottom) + 38px));
+  z-index: 16;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  max-width: calc(100% - 24px);
+  padding: 0.55rem 0.55rem 0.55rem 0.8rem;
+  border: 1px solid #3a3a3a;
+  border-radius: 8px;
+  background: #1b1b1b;
+  color: #fff;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
+  font-size: 0.82rem;
+  line-height: 1.3;
+  text-align: center;
+  transform: translateX(-50%);
+}
+
+.measure-tooltip button {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #bbb;
+  cursor: pointer;
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.measure-tooltip button:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+#map.measuring,
+#map.measuring .maplibregl-canvas {
+  cursor: crosshair;
 }
 
 #sheet-backdrop {
@@ -590,8 +640,13 @@ body {
 }
 
 .search-results {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 1;
   list-style: none;
-  margin: 4px 0 0;
+  margin: 0;
   padding: 0;
   background: #1b1b1b;
   border-radius: 8px;
@@ -632,6 +687,10 @@ body {
 
   .search-container.expanded {
     width: calc(100% - 74px); /* Leave room for layers button */
+  }
+
+  .search-results {
+    max-height: min(220px, calc(100dvh - 74px));
   }
 
   .search-input-wrapper {
@@ -836,6 +895,13 @@ body {
 
 .modal-body p:last-child {
   margin-bottom: 0;
+}
+
+.modal-body .about-dedication {
+  margin-top: 1.25rem;
+  text-align: center;
+  font-style: italic;
+  color: #ccc;
 }
 
 .modal-body ul {
