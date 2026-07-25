@@ -2,41 +2,137 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>European Forest Fires Map</title>
   </head>
   <body>
     <div id="app">
       <header id="toolbar">
-        <h1>European Forest Fires</h1>
-        <div id="mode-toggle" role="group" aria-label="Fire time range">
-          <button type="button" id="mode-current" class="mode-btn active" aria-pressed="true">
-            Current fires
-          </button>
-          <button type="button" id="mode-past" class="mode-btn" aria-pressed="false">
-            Past fires
-          </button>
-        </div>
-        <select id="year-select" hidden></select>
-        <div id="layer-toggle" role="group" aria-label="Fire layers">
-          <label class="layer-checkbox">
-            <input type="checkbox" id="toggle-active-fires" checked />
-            Active fires
-          </label>
-          <label class="layer-checkbox">
-            <input type="checkbox" id="toggle-burnt-areas" checked />
-            Burnt areas
-          </label>
-        </div>
-        <div id="map-options" role="group" aria-label="Map display options">
-          <label class="layer-checkbox">
-            <input type="checkbox" id="toggle-place-labels" checked />
-            Place names
-          </label>
-        </div>
+        <h1 data-i18n="header_title">European Forest Fires</h1>
         <span id="status" role="status"></span>
       </header>
-      <div id="map"></div>
+      <div id="map">
+        <button
+          type="button"
+          id="layers-btn"
+          class="fab"
+          aria-haspopup="dialog"
+          aria-expanded="false"
+          aria-controls="layers-sheet"
+          data-i18n-aria-label="aria_map_layers"
+          aria-label="Map layers"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+            <polyline points="2 17 12 22 22 17"></polyline>
+            <polyline points="2 12 12 17 22 12"></polyline>
+          </svg>
+        </button>
+
+        <button
+          type="button"
+          id="compass-btn"
+          class="fab"
+          data-i18n-aria-label="aria_compass"
+          aria-label="Reset orientation to North"
+        >
+          <svg id="compass-needle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="12 2 16 11 12 9 8 11" fill="#e25822" stroke="#e25822"></polygon>
+            <polygon points="12 22 16 13 12 15 8 13" fill="currentColor"></polygon>
+          </svg>
+        </button>
+
+        <div id="search-container" class="search-container">
+          <div class="search-input-wrapper">
+            <input
+              type="text"
+              id="search-input"
+              data-i18n-placeholder="search_placeholder"
+              placeholder="Search for a place..."
+              autocomplete="off"
+            />
+            <button type="button" id="search-btn" data-i18n-aria-label="aria_search" aria-label="Search">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+            </button>
+          </div>
+          <ul id="search-results" class="search-results" hidden></ul>
+        </div>
+      </div>
+
+      <div id="sheet-backdrop" hidden></div>
+      <div id="layers-sheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title" hidden inert>
+        <div class="sheet-handle"></div>
+        <div class="sheet-header">
+          <h2 id="sheet-title" data-i18n="layers_title">Layers</h2>
+          <button type="button" id="sheet-close" class="icon-btn" data-i18n-aria-label="aria_close" aria-label="Close">&times;</button>
+        </div>
+        <div class="sheet-content">
+          <section class="sheet-section">
+            <h3 data-i18n="basemap">Basemap</h3>
+            <div id="basemap-gallery" class="basemap-gallery" role="radiogroup" data-i18n-aria-label="aria_bg_map" aria-label="Background map">
+              <button type="button" class="basemap-option" data-basemap="plain" role="radio" aria-checked="true">
+                <span class="basemap-thumb basemap-thumb-plain"></span>
+                <span class="basemap-label" data-i18n="basemap_plain">Plain</span>
+              </button>
+              <button type="button" class="basemap-option" data-basemap="positron" role="radio" aria-checked="false">
+                <span class="basemap-thumb basemap-thumb-positron"></span>
+                <span class="basemap-label" data-i18n="basemap_positron">Positron</span>
+              </button>
+              <button type="button" class="basemap-option" data-basemap="osm" role="radio" aria-checked="false">
+                <span class="basemap-thumb basemap-thumb-osm"></span>
+                <span class="basemap-label" data-i18n="basemap_osm">OSM</span>
+              </button>
+              <button type="button" class="basemap-option" data-basemap="satellite" role="radio" aria-checked="false">
+                <span class="basemap-thumb basemap-thumb-satellite"></span>
+                <span class="basemap-label" data-i18n="basemap_satellite">Satellite</span>
+              </button>
+            </div>
+          </section>
+
+          <section class="sheet-section">
+            <h3 data-i18n="map_details">Map details</h3>
+            <div id="mode-toggle" class="segmented" role="group" data-i18n-aria-label="aria_fire_time_range" aria-label="Fire time range">
+              <button type="button" id="mode-current" class="segmented-btn active" aria-pressed="true" data-i18n="current_fires">
+                Current fires
+              </button>
+              <button type="button" id="mode-past" class="segmented-btn" aria-pressed="false" data-i18n="past_fires">
+                Past fires
+              </button>
+            </div>
+            <select id="year-select" hidden></select>
+
+            <div id="layer-toggle" class="detail-list" role="group" data-i18n-aria-label="aria_fire_layers" aria-label="Fire layers">
+              <label class="detail-row">
+                <span class="detail-row-label" data-i18n="active_fires">Active fires</span>
+                <span class="switch">
+                  <input type="checkbox" id="toggle-active-fires" checked />
+                  <span class="switch-track"></span>
+                </span>
+              </label>
+              <label class="detail-row">
+                <span class="detail-row-label" data-i18n="burnt_areas">Burnt areas</span>
+                <span class="switch">
+                  <input type="checkbox" id="toggle-burnt-areas" checked />
+                  <span class="switch-track"></span>
+                </span>
+              </label>
+            </div>
+
+            <div class="detail-list">
+              <label class="detail-row">
+                <span class="detail-row-label" data-i18n="place_names">Place names</span>
+                <span class="switch">
+                  <input type="checkbox" id="toggle-place-labels" checked />
+                  <span class="switch-track"></span>
+                </span>
+              </label>
+            </div>
+          </section>
+        </div>
+      </div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

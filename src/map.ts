@@ -4,12 +4,14 @@ import {
   NavigationControl,
   ScaleControl,
   setWorkerUrl,
+  type ErrorEvent,
   type GeoJSONSource,
   type LngLatBoundsLike,
+  type RasterTileSource,
 } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { fetchCountryBorders } from "./borders";
-import { tileTemplate, type WmtsLayerKind } from "./effis";
+import { pastFiresTileTemplate, tileTemplate, type WmtsLayerKind } from "./effis";
 
 // maplibre-gl v6 builds its tile-parsing Web Worker URL dynamically at
 // runtime, which Vite can't statically analyze to bundle as an asset (the
@@ -25,12 +27,16 @@ const BORDERS_LAYER_ID = "country-borders-line";
 const EFFIS_ATTRIBUTION =
   '<a href="https://forest-fire.emergency.copernicus.eu/" target="_blank" rel="noopener">EFFIS / Copernicus Emergency Management Service</a>';
 
-export const BURNT_AREAS_LAYER_IDS = ["burnt-areas-modis", "burnt-areas-nrt"] as const;
+export const BURNT_AREAS_LAYER_IDS = [
+  "burnt-areas-modis",
+  "burnt-areas-nrt",
+] as const;
 export const ACTIVE_FIRES_LAYER_IDS = [
   "active-fires-modis",
   "active-fires-viirs",
   "active-fires-s3",
 ] as const;
+export const PAST_FIRES_LAYER_ID = "past-fires-raster";
 
 // Default map view — mainland Spain plus the Balearic Islands.
 const DEFAULT_BOUNDS: LngLatBoundsLike = [
@@ -56,6 +62,7 @@ export async function createMap(container: HTMLElement): Promise<Map> {
     addCountryBorders(map);
     addBurntAreasLayers(map);
     addActiveFiresLayers(map);
+    addPastFiresLayer(map);
   });
 
   map.addControl(new NavigationControl({ showCompass: false }), "top-right");
@@ -86,7 +93,9 @@ export async function createMap(container: HTMLElement): Promise<Map> {
  * and lets normal click-to-expand behaviour take over.
  */
 function collapseAttributionControl(container: HTMLElement): void {
-  const attribution = container.querySelector<HTMLElement>(".maplibregl-ctrl-attrib");
+  const attribution = container.querySelector<HTMLElement>(
+    ".maplibregl-ctrl-attrib",
+  );
   if (!attribution) return;
 
   const collapse = () => {
@@ -96,7 +105,10 @@ function collapseAttributionControl(container: HTMLElement): void {
   collapse();
 
   const observer = new MutationObserver(collapse);
-  observer.observe(attribution, { attributes: true, attributeFilter: ["open"] });
+  observer.observe(attribution, {
+    attributes: true,
+    attributeFilter: ["open"],
+  });
   attribution
     .querySelector(".maplibregl-ctrl-attrib-button")
     ?.addEventListener("click", () => observer.disconnect(), { once: true });
@@ -116,9 +128,9 @@ function collapseAttributionControl(container: HTMLElement): void {
  * loading at all over a transient network hiccup.
  */
 async function loadStrippedStyle(): Promise<Style | string> {
-  let style: Style;
+  let raw: Style;
   try {
-    style = (await (await fetch(OPENFREEMAP_STYLE)).json()) as Style;
+    raw = await fetchLibertyStyle();
   } catch (err) {
     console.warn(
       "Failed to pre-fetch basemap style, falling back to default load path:",
@@ -127,9 +139,122 @@ async function loadStrippedStyle(): Promise<Style | string> {
     return OPENFREEMAP_STYLE;
   }
 
-  style.projection = { type: "globe" };
-  stripToPlaceLabelsOnly(style);
-  return style;
+  raw.projection = { type: "globe" };
+  stripToPlaceLabelsOnly(raw);
+  return raw;
+}
+
+// Cached so switching the basemap back to "plain" (see setBasemap below)
+// doesn't re-fetch the ~1MB style JSON from OpenFreeMap every time — only
+// the very first load (or first switch to "plain") pays the network cost.
+// Callers get a fresh clone each time since stripToPlaceLabelsOnly mutates
+// its argument in place and the cached copy must stay pristine.
+let cachedLibertyStyle: Style | null = null;
+
+async function fetchLibertyStyle(): Promise<Style> {
+  cachedLibertyStyle ??= (await (await fetch(OPENFREEMAP_STYLE)).json()) as Style;
+  return structuredClone(cachedLibertyStyle);
+}
+
+export type BasemapKind = "plain" | "positron" | "osm" | "satellite";
+
+const CARTO_POSITRON_STYLE = "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json";
+
+// OSM's tile usage policy (operations.osmfoundation.org/policies/tiles)
+// discourages heavy production traffic against tile.openstreetmap.org
+// directly — fine at this app's scale, but if usage ever grows, switch to a
+// dedicated tile provider instead of leaning harder on the community server.
+const OSM_TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+const OSM_ATTRIBUTION =
+  '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors';
+
+// Esri's World Imagery service — free, no API key, the standard "satellite"
+// raster basemap choice (same one leaflet-providers lists as Esri.WorldImagery).
+// Note the tile URL is z/y/x, not z/x/y — that's an ArcGIS REST convention,
+// not a typo.
+const SATELLITE_TILE_URL =
+  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+const SATELLITE_ATTRIBUTION =
+  '&copy; <a href="https://www.esri.com/" target="_blank" rel="noopener">Esri</a>, Maxar, Earthstar Geographics, and the GIS User Community';
+
+/** Builds a minimal single-layer style wrapping one XYZ raster tile source —
+ * used for "osm" and "satellite", which (unlike "plain"/"positron") aren't
+ * vector styles we need to reach into. */
+function rasterStyle(sourceId: string, tileUrl: string, attribution: string): Style {
+  return {
+    version: 8,
+    sources: {
+      [sourceId]: { type: "raster", tiles: [tileUrl], tileSize: 256, attribution },
+    },
+    layers: [{ id: sourceId, type: "raster", source: sourceId }],
+  };
+}
+
+/** Resolves a basemap choice to whatever setStyle() needs to load it.
+ * "plain" is built the same way as the initial load (fetched + stripped to
+ * white/labels-only). "positron" is passed straight through as a URL rather
+ * than pre-fetched/re-themed like "plain" — it's already a muted basemap as
+ * shipped, and letting MapLibre fetch it itself means its sprite/glyph URLs
+ * (relative to the style's own URL) resolve correctly without us having to
+ * replicate that resolution logic. "osm"/"satellite" are raster, built
+ * inline via rasterStyle(). */
+async function styleForBasemap(kind: BasemapKind): Promise<Style | string> {
+  switch (kind) {
+    case "plain":
+      return loadStrippedStyle();
+    case "positron":
+      return CARTO_POSITRON_STYLE;
+    case "osm":
+      return rasterStyle("osm-raster", OSM_TILE_URL, OSM_ATTRIBUTION);
+    case "satellite":
+      return rasterStyle("satellite-raster", SATELLITE_TILE_URL, SATELLITE_ATTRIBUTION);
+  }
+}
+
+/**
+ * Swaps the base map style, then re-adds everything this app layers on top
+ * of it — country borders, burnt areas, active fires, and the past-fires
+ * WMTS raster layer. (The past-fires *GeoJSON* layer isn't re-added here
+ * since main.ts owns that source; it does the same thing on its own after
+ * awaiting this — main.ts also re-applies the currently-selected year to
+ * the WMTS layer re-added here, since a freshly re-added source always
+ * starts back at its default year otherwise.)
+ *
+ * setStyle() replaces the whole style, which silently drops any source or
+ * layer that isn't part of the new style JSON — including all of ours — so
+ * everything has to be rebuilt from scratch once the new style has finished
+ * loading rather than only once at startup. Globe projection is likewise a
+ * property of the old style object, not a persistent map setting, so it's
+ * reapplied via setProjection() here instead of requiring every style
+ * variant to bake it in itself.
+ *
+ * Waits for whichever of "style.load" (success) or "error" (e.g. the new
+ * style's URL failed to fetch) fires first, so a failed switch rejects
+ * instead of leaving the caller awaiting forever.
+ */
+export function setBasemap(map: Map, kind: BasemapKind, placeLabelsEnabled: boolean): Promise<void> {
+  return styleForBasemap(kind).then(
+    (style) =>
+      new Promise<void>((resolve, reject) => {
+        const onLoad = async () => {
+          map.off("error", onError);
+          map.setProjection({ type: "globe" });
+          addCountryBorders(map);
+          addBurntAreasLayers(map);
+          addActiveFiresLayers(map);
+          addPastFiresLayer(map);
+          await setPlaceLabelsVisible(map, placeLabelsEnabled);
+          resolve();
+        };
+        const onError = (e: ErrorEvent) => {
+          map.off("style.load", onLoad);
+          reject(e.error);
+        };
+        map.once("style.load", onLoad);
+        map.once("error", onError);
+        map.setStyle(style);
+      }),
+  );
 }
 
 // Liberty's "place" source-layer covers 9 symbol layers, one per place
@@ -143,8 +268,8 @@ async function loadStrippedStyle(): Promise<Style | string> {
 // relying on each layer's filter expression; if Liberty renames these ids
 // upstream, the affected layers just fall back to being shown.
 const HIDDEN_PLACE_LABEL_IDS = new Set([
-  "label_village",
-  "label_town",
+  //"label_village",
+  //"label_town",
   "label_other",
 ]);
 
@@ -182,16 +307,63 @@ function stripToPlaceLabelsOnly(style: Style): void {
  * HIDDEN_PLACE_LABEL_IDS) on or off, without touching anything else.
  * Queries the live style rather than caching ids from `stripToPlaceLabelsOnly`
  * so it stays correct if that function's set of kept layers ever changes. */
-export function setPlaceLabelsVisible(map: Map, visible: boolean): void {
+export async function setPlaceLabelsVisible(map: Map, visible: boolean): Promise<void> {
+  const currentStyle = map.getStyle();
+  if (!currentStyle) return;
+
+  const isRaster = currentStyle.layers.some(
+    (l) => l.id === "osm-raster" || l.id === "satellite-raster",
+  );
+
+  if (visible && isRaster && !map.getSource("openmaptiles")) {
+    try {
+      const liberty = await fetchLibertyStyle();
+      if (!map.getSource("openmaptiles")) {
+        map.addSource("openmaptiles", liberty.sources.openmaptiles);
+      }
+      const placeLayers = liberty.layers.filter(
+        (layer) =>
+          layer.type === "symbol" &&
+          layer["source-layer"] === "place" &&
+          !HIDDEN_PLACE_LABEL_IDS.has(layer.id),
+      );
+      const isSatellite = currentStyle.layers.some((l) => l.id === "satellite-raster");
+      for (const layer of placeLayers) {
+        if (!map.getLayer(layer.id)) {
+          const cloned = structuredClone(layer);
+          if (isSatellite) {
+            cloned.paint = {
+              ...cloned.paint,
+              "text-color": "#ffffff",
+              "text-halo-color": "#000000",
+              "text-halo-width": 1.5,
+            };
+          } else {
+            cloned.paint = {
+              ...cloned.paint,
+              "text-color": "#000000",
+              "text-halo-color": "#ffffff",
+              "text-halo-width": 1.5,
+            };
+          }
+          map.addLayer(cloned);
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to dynamically inject place labels:", e);
+    }
+  }
+
   const ids = map
     .getStyle()
     .layers.filter(
       (layer) =>
         layer.type === "symbol" &&
-        layer["source-layer"] === "place" &&
+        (layer["source-layer"] === "place" || layer["source-layer"] === "place_label") &&
         !HIDDEN_PLACE_LABEL_IDS.has(layer.id),
     )
     .map((layer) => layer.id);
+
   for (const id of ids) {
     map.setLayoutProperty(id, "visibility", visible ? "visible" : "none");
   }
@@ -280,4 +452,40 @@ function addActiveFiresLayers(map: Map): void {
   for (const id of ACTIVE_FIRES_LAYER_IDS) {
     addWmtsRasterLayer(map, id, id, firstSymbolLayer?.id);
   }
+}
+
+/** Adds the past-fires WMTS raster overlay (`modis.ba.<year>`, 2016+ only —
+ * see EARLIEST_WMTS_YEAR in effis.ts), below the place labels but above
+ * country borders, same as the current-fires WMTS layers. Starts on last
+ * year as a reasonable default; main.ts immediately re-points it at
+ * whichever year is actually selected via `setPastFiresYear` once the map
+ * finishes loading (and again after every basemap switch, since setStyle()
+ * drops this source along with everything else — see setBasemap above).
+ * This sits alongside, not instead of, main.ts's WFS-backed vector fill/
+ * outline layer — see the comment on `pastFiresTileTemplate` in effis.ts
+ * for why both exist. */
+function addPastFiresLayer(map: Map): void {
+  const firstSymbolLayer = map
+    .getStyle()
+    .layers.find((layer) => layer.type === "symbol");
+  map.addSource(PAST_FIRES_LAYER_ID, {
+    type: "raster",
+    tiles: [pastFiresTileTemplate(new Date().getFullYear() - 1)],
+    tileSize: 1024,
+    attribution: EFFIS_ATTRIBUTION,
+  });
+  map.addLayer(
+    { id: PAST_FIRES_LAYER_ID, type: "raster", source: PAST_FIRES_LAYER_ID },
+    firstSymbolLayer?.id,
+  );
+}
+
+/** Repoints the past-fires raster layer at a different year's tiles —
+ * called whenever the year `<select>` changes, and once right after this
+ * layer is (re-)created, since it always starts on a hardcoded default
+ * year (see addPastFiresLayer). */
+export function setPastFiresYear(map: Map, year: number): void {
+  (map.getSource(PAST_FIRES_LAYER_ID) as RasterTileSource).setTiles([
+    pastFiresTileTemplate(year),
+  ]);
 }

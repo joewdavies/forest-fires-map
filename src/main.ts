@@ -1,8 +1,33 @@
+import { initTranslations, t } from "./i18n";
 import "./style.css";
-import { Popup, type GeoJSONSource, type LngLat, type MapGeoJSONFeature, type MapLayerMouseEvent } from "maplibre-gl";
+import {
+  Popup,
+  type GeoJSONSource,
+  type LngLat,
+  type Map as MaplibreMap,
+  type MapGeoJSONFeature,
+  type MapLayerMouseEvent,
+} from "maplibre-gl";
 import type { FeatureCollection } from "geojson";
-import { createMap, setPlaceLabelsVisible, ACTIVE_FIRES_LAYER_IDS, BURNT_AREAS_LAYER_IDS } from "./map";
-import { EffisError, fetchHistoricalFires, getBurntAreaHa, getCountry, getFireDateIso, getProvince } from "./effis";
+import {
+  createMap,
+  setBasemap,
+  setPastFiresYear,
+  setPlaceLabelsVisible,
+  ACTIVE_FIRES_LAYER_IDS,
+  BURNT_AREAS_LAYER_IDS,
+  PAST_FIRES_LAYER_ID,
+  type BasemapKind,
+} from "./map";
+import {
+  EARLIEST_WMTS_YEAR,
+  EffisError,
+  fetchHistoricalFires,
+  getBurntAreaHa,
+  getCountry,
+  getFireDateIso,
+  getProvince,
+} from "./effis";
 
 const FIRE_SOURCE_ID = "fires";
 const FIRE_FILL_LAYER = "fires-fill";
@@ -21,15 +46,114 @@ const activeFiresCheckbox = document.getElementById("toggle-active-fires") as HT
 const burntAreasCheckbox = document.getElementById("toggle-burnt-areas") as HTMLInputElement;
 const placeLabelsCheckbox = document.getElementById("toggle-place-labels") as HTMLInputElement;
 
+const layersBtn = document.getElementById("layers-btn") as HTMLButtonElement;
+const layersSheet = document.getElementById("layers-sheet") as HTMLElement;
+const sheetCloseBtn = document.getElementById("sheet-close") as HTMLButtonElement;
+const sheetBackdrop = document.getElementById("sheet-backdrop") as HTMLElement;
+const basemapOptions = document.querySelectorAll(".basemap-option") as NodeListOf<HTMLButtonElement>;
+const compassBtn = document.getElementById("compass-btn") as HTMLButtonElement;
+const compassNeedle = document.getElementById("compass-needle") as SVGElement | null;
+
 let mode: Mode = "current";
 let requestId = 0;
+let currentBasemap: BasemapKind = "plain";
 
 populateYearSelect();
+
+initTranslations();
 
 const map = await createMap(mapContainer);
 const popup = new Popup({ closeButton: true, closeOnClick: true, maxWidth: "280px" });
 
 map.on("load", () => {
+  addFireLayer(map);
+
+  map.on("mouseenter", FIRE_FILL_LAYER, () => {
+    map.getCanvas().style.cursor = "pointer";
+  });
+  map.on("mouseleave", FIRE_FILL_LAYER, () => {
+    map.getCanvas().style.cursor = "";
+  });
+  map.on("click", FIRE_FILL_LAYER, (e: MapLayerMouseEvent) => {
+    const feature = e.features?.[0];
+    if (feature) showFirePopup(feature, e.lngLat);
+  });
+
+  setPastFiresYear(map, Number(yearSelect.value));
+  applyModeVisibility();
+  setPlaceLabelsVisible(map, placeLabelsCheckbox.checked);
+  loadFires();
+});
+
+currentBtn.addEventListener("click", () => setMode("current"));
+pastBtn.addEventListener("click", () => setMode("past"));
+yearSelect.addEventListener("change", () => {
+  if (mode === "past") loadFires();
+});
+activeFiresCheckbox.addEventListener("change", applyModeVisibility);
+burntAreasCheckbox.addEventListener("change", applyModeVisibility);
+placeLabelsCheckbox.addEventListener("change", () => setPlaceLabelsVisible(map, placeLabelsCheckbox.checked));
+
+for (const option of basemapOptions) {
+  option.addEventListener("click", () => {
+    const kind = option.dataset.basemap as BasemapKind;
+    if (kind !== currentBasemap) handleBasemapChange(kind);
+  });
+}
+
+layersBtn.addEventListener("click", openSheet);
+sheetCloseBtn.addEventListener("click", closeSheet);
+sheetBackdrop.addEventListener("click", closeSheet);
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !layersSheet.hidden) closeSheet();
+});
+
+compassBtn.addEventListener("click", () => {
+  map.resetNorthPitch();
+});
+
+map.on("rotate", updateCompass);
+map.on("load", updateCompass);
+
+function updateCompass() {
+  const bearing = map.getBearing();
+  if (Math.abs(bearing) > 0.5) {
+    compassBtn.classList.add("visible");
+    if (compassNeedle) {
+      compassNeedle.style.transform = `rotate(${-bearing}deg)`;
+    }
+  } else {
+    compassBtn.classList.remove("visible");
+  }
+}
+
+function openSheet() {
+  sheetBackdrop.hidden = false;
+  layersSheet.hidden = false;
+  layersSheet.removeAttribute("inert");
+  requestAnimationFrame(() => {
+    sheetBackdrop.classList.add("open");
+    layersSheet.classList.add("open");
+  });
+  layersBtn.setAttribute("aria-expanded", "true");
+}
+
+function closeSheet() {
+  sheetBackdrop.classList.remove("open");
+  layersSheet.classList.remove("open");
+  layersSheet.setAttribute("inert", "");
+  layersBtn.setAttribute("aria-expanded", "false");
+  layersSheet.addEventListener(
+    "transitionend",
+    () => {
+      sheetBackdrop.hidden = true;
+      layersSheet.hidden = true;
+    },
+    { once: true },
+  );
+}
+
+function addFireLayer(map: MaplibreMap): void {
   map.addSource(FIRE_SOURCE_ID, { type: "geojson", data: emptyCollection() });
 
   map.addLayer({
@@ -45,31 +169,29 @@ map.on("load", () => {
     source: FIRE_SOURCE_ID,
     paint: { "line-color": "#ff0000", "line-width": 1 },
   });
+}
 
-  map.on("mouseenter", FIRE_FILL_LAYER, () => {
-    map.getCanvas().style.cursor = "pointer";
-  });
-  map.on("mouseleave", FIRE_FILL_LAYER, () => {
-    map.getCanvas().style.cursor = "";
-  });
-  map.on("click", FIRE_FILL_LAYER, (e: MapLayerMouseEvent) => {
-    const feature = e.features?.[0];
-    if (feature) showFirePopup(feature, e.lngLat);
-  });
+async function handleBasemapChange(kind: BasemapKind) {
+  setStatus(t("loading_style"));
+  try {
+    await setBasemap(map, kind, placeLabelsCheckbox.checked);
+  } catch (err) {
+    console.warn("Failed to switch basemap:", err);
+    setStatus(t("error_basemap"), "error");
+    return;
+  }
 
+  currentBasemap = kind;
+  for (const option of basemapOptions) {
+    option.setAttribute("aria-checked", String(option.dataset.basemap === kind));
+  }
+
+  addFireLayer(map);
+  setPastFiresYear(map, Number(yearSelect.value));
   applyModeVisibility();
   setPlaceLabelsVisible(map, placeLabelsCheckbox.checked);
   loadFires();
-});
-
-currentBtn.addEventListener("click", () => setMode("current"));
-pastBtn.addEventListener("click", () => setMode("past"));
-yearSelect.addEventListener("change", () => {
-  if (mode === "past") loadFires();
-});
-activeFiresCheckbox.addEventListener("change", applyModeVisibility);
-burntAreasCheckbox.addEventListener("change", applyModeVisibility);
-placeLabelsCheckbox.addEventListener("change", () => setPlaceLabelsVisible(map, placeLabelsCheckbox.checked));
+}
 
 function populateYearSelect() {
   const currentYear = new Date().getFullYear();
@@ -97,12 +219,6 @@ function setMode(next: Mode) {
   loadFires();
 }
 
-/** Shows the layers for the active mode — the WMTS raster overlays (burnt
- * areas + active fires, added in map.ts) for "Current fires", each also
- * gated by its own checkbox, or the WFS vector layers for "Past fires".
- * These are independent, always-present layers rather than one shared
- * source, since current fires render as WMTS tiles and past fires as WFS
- * vector polygons (see effis.ts for why). */
 function applyModeVisibility() {
   const burntAreasVisible = mode === "current" && burntAreasCheckbox.checked;
   for (const id of BURNT_AREAS_LAYER_IDS) {
@@ -117,6 +233,9 @@ function applyModeVisibility() {
   const pastVisibility = mode === "past" ? "visible" : "none";
   map.setLayoutProperty(FIRE_FILL_LAYER, "visibility", pastVisibility);
   map.setLayoutProperty(FIRE_OUTLINE_LAYER, "visibility", pastVisibility);
+
+  const pastRasterVisible = mode === "past" && Number(yearSelect.value) >= EARLIEST_WMTS_YEAR;
+  map.setLayoutProperty(PAST_FIRES_LAYER_ID, "visibility", pastRasterVisible ? "visible" : "none");
 }
 
 function emptyCollection(): FeatureCollection {
@@ -131,10 +250,7 @@ function setStatus(message: string, state?: "error") {
 
 async function loadFires() {
   if (mode === "current") {
-    // No fetch needed — the raster layers load their own tiles. EFFIS's WFS
-    // (used for "Past fires" below) has been unreliable enough that current
-    // fires render via WMS tiles instead; see effis.ts for why.
-    setStatus("Showing live active fires and burnt areas from EFFIS.");
+    setStatus(t("live_fires_status"));
     return;
   }
 
@@ -143,37 +259,38 @@ async function loadFires() {
   if (!source) return;
 
   const year = yearSelect.value;
-  setStatus(`Loading ${year} fires…`);
+  setStatus(t("loading_year_fires", { year }));
 
   try {
     const data = await fetchHistoricalFires(Number(year));
-    if (thisRequest !== requestId) return; // superseded by a newer request
+    if (thisRequest !== requestId) return;
 
     source.setData(data);
     setStatus(describeResult(data.features.length, year));
   } catch (err) {
     if (thisRequest !== requestId) return;
     source.setData(emptyCollection());
-    setStatus(err instanceof EffisError ? err.message : "Failed to load fire data.", "error");
+    setStatus(err instanceof EffisError ? err.message : t("error_load_failed"), "error");
   }
 }
 
 function describeResult(count: number, year: string): string {
-  if (count === 0) return `No burnt areas recorded for ${year}.`;
-  return `${count.toLocaleString()} fire${count === 1 ? "" : "s"} shown.`;
+  if (count === 0) return t("no_burnt_areas", { year });
+  const key = count === 1 ? "fires_shown_singular" : "fires_shown_plural";
+  return t(key, { count: count.toLocaleString() });
 }
 
 function showFirePopup(feature: MapGeoJSONFeature, lngLat: LngLat) {
-  const date = getFireDateIso(feature) ?? "Unknown";
+  const date = getFireDateIso(feature) ?? t("unknown");
   const areaHa = getBurntAreaHa(feature);
-  const country = getCountry(feature) ?? "Unknown";
+  const country = getCountry(feature) ?? t("unknown");
   const province = getProvince(feature);
 
   const html = `
     <dl class="fire-popup">
-      <dt>Date</dt><dd>${date}</dd>
-      <dt>Burnt area</dt><dd>${areaHa != null ? `${areaHa.toLocaleString()} ha` : "Unknown"}</dd>
-      <dt>Country</dt><dd>${country}${province ? `, ${province}` : ""}</dd>
+      <dt>${t("popup_date")}</dt><dd>${date}</dd>
+      <dt>${t("popup_burnt_area")}</dt><dd>${areaHa != null ? `${areaHa.toLocaleString()} ha` : t("unknown")}</dd>
+      <dt>${t("popup_country")}</dt><dd>${country}${province ? `, ${province}` : ""}</dd>
     </dl>
   `;
   popup.setLngLat(lngLat).setHTML(html).addTo(map);

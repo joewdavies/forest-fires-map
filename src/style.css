@@ -7,6 +7,17 @@
   box-sizing: border-box;
 }
 
+/* The `hidden` attribute only applies `display: none` via the UA
+   stylesheet, which loses to *any* author rule that sets `display` on the
+   same element (author-origin CSS always outranks UA-origin CSS, no matter
+   the specificity) — so every `el.hidden = true` in main.ts would silently
+   do nothing on an element this file also gives a `display` to (year-select,
+   layer-toggle, the sheet). This one rule makes `hidden` win unconditionally
+   instead of relying on `:not([hidden])` everywhere below. */
+[hidden] {
+  display: none !important;
+}
+
 html,
 body {
   margin: 0;
@@ -35,57 +46,6 @@ body {
   font-weight: 600;
   margin: 0;
   white-space: nowrap;
-}
-
-#mode-toggle {
-  display: flex;
-  gap: 0.25rem;
-}
-
-.mode-btn {
-  padding: 0.4rem 0.8rem;
-  border: 1px solid #555;
-  background: transparent;
-  color: #ddd;
-  border-radius: 999px;
-  cursor: pointer;
-  font-size: 0.85rem;
-}
-
-.mode-btn.active {
-  background: #e25822;
-  border-color: #e25822;
-  color: #fff;
-}
-
-#year-select {
-  padding: 0.3rem 0.5rem;
-  border-radius: 6px;
-  border: 1px solid #555;
-  background: #2a2a2a;
-  color: #fff;
-}
-
-#layer-toggle,
-#map-options {
-  display: flex;
-  gap: 0.75rem;
-  align-items: center;
-}
-
-.layer-checkbox {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.85rem;
-  color: #ddd;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.layer-checkbox input {
-  accent-color: #e25822;
-  cursor: pointer;
 }
 
 #status {
@@ -126,4 +86,453 @@ body {
 
 .fire-popup dd {
   margin: 0 0 0.4rem;
+}
+
+/* ---------- Layers control: FAB + bottom sheet (Google Maps mobile style) ---------- */
+
+/* Sits on the map itself, below the NavigationControl's zoom buttons
+   (top-right, ~10px inset, ~58px tall) rather than bottom-right, which
+   already holds the collapsed attribution control. */
+.fab {
+  position: absolute;
+  top: max(80px, calc(env(safe-area-inset-top) + 80px));
+  right: max(10px, env(safe-area-inset-right));
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 50%;
+  background: #1b1b1b;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+  padding: 0;
+  z-index: 5;
+}
+
+@media (max-width: 768px) {
+  .maplibregl-ctrl-group {
+    display: none !important;
+  }
+  .fab {
+    top: max(10px, calc(env(safe-area-inset-top) + 10px));
+  }
+  #compass-btn {
+    top: calc(max(10px, calc(env(safe-area-inset-top) + 10px)) + 54px);
+  }
+}
+
+#compass-btn {
+  top: calc(max(80px, calc(env(safe-area-inset-top) + 80px)) + 54px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease, transform 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+#compass-btn.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+#compass-needle {
+  width: 22px;
+  height: 22px;
+  transform-origin: center;
+}
+
+.fab:active {
+  transform: scale(0.95);
+}
+
+.fab svg {
+  width: 22px;
+  height: 22px;
+}
+
+#sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+  z-index: 20;
+}
+
+#sheet-backdrop.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-height: 82vh;
+  display: flex;
+  flex-direction: column;
+  background: #1b1b1b;
+  color: #fff;
+  border-radius: 16px 16px 0 0;
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.4);
+  transform: translateY(100%);
+  transition: transform 0.25s cubic-bezier(0.32, 0.72, 0, 1);
+  z-index: 21;
+  overscroll-behavior: contain;
+}
+
+.sheet.open {
+  transform: translateY(0);
+}
+
+.sheet-handle {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 4px;
+  margin: 10px auto 0;
+  background: #555;
+  border-radius: 999px;
+}
+
+.sheet-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.5rem 0.5rem 1.1rem;
+}
+
+.sheet-header h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.icon-btn {
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #fff;
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.icon-btn:active {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.sheet-content {
+  overflow-y: auto;
+  padding: 0 1rem;
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
+.sheet-section {
+  margin-top: 1.25rem;
+}
+
+.sheet-section:first-child {
+  margin-top: 0.25rem;
+}
+
+.sheet-section h3 {
+  margin: 0 0 0.6rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #999;
+}
+
+.basemap-gallery {
+  display: flex;
+  gap: 0.75rem;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  padding-bottom: 0.25rem;
+  -webkit-overflow-scrolling: touch;
+}
+
+.basemap-option {
+  flex: 0 0 auto;
+  width: 68px;
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  border: none;
+  background: none;
+  color: #ccc;
+  padding: 0;
+  cursor: pointer;
+  font-size: 0.75rem;
+}
+
+.basemap-thumb {
+  width: 64px;
+  height: 64px;
+  border-radius: 14px;
+  border: 2px solid transparent;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.basemap-option[aria-checked="true"] .basemap-thumb {
+  border-color: #e25822;
+  box-shadow: 0 0 0 2px rgba(226, 88, 34, 0.35);
+}
+
+.basemap-option[aria-checked="true"] .basemap-label {
+  color: #fff;
+  font-weight: 600;
+}
+
+/* Small CSS-only "map style" swatches — cheap and deterministic, no thumbnail
+   assets to fetch/keep in sync with the real basemap styles. */
+.basemap-thumb-plain {
+  background: #fdfdfd;
+  background-image: linear-gradient(#ddd 1px, transparent 1px), linear-gradient(90deg, #ddd 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+
+.basemap-thumb-positron {
+  background: #e9e6df;
+  background-image: linear-gradient(#d8d3c8 1px, transparent 1px), linear-gradient(90deg, #d8d3c8 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+
+.basemap-thumb-osm {
+  background: linear-gradient(
+    135deg,
+    #a8d8b9 0%,
+    #a8d8b9 40%,
+    #f1e5b3 40%,
+    #f1e5b3 60%,
+    #a9cde3 60%,
+    #a9cde3 100%
+  );
+}
+
+.basemap-thumb-satellite {
+  background:
+    radial-gradient(circle at 30% 30%, #6b8f4e, transparent 55%),
+    radial-gradient(circle at 70% 60%, #4a6b3a, transparent 55%), #3d5a34;
+}
+
+.segmented {
+  display: flex;
+  gap: 3px;
+  background: #2a2a2a;
+  border-radius: 10px;
+  padding: 3px;
+}
+
+.segmented-btn {
+  flex: 1;
+  padding: 0.55rem 0.5rem;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #ccc;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.segmented-btn.active {
+  background: #e25822;
+  color: #fff;
+}
+
+#year-select {
+  width: 100%;
+  margin-top: 0.6rem;
+  padding: 0.6rem 0.5rem;
+  border-radius: 8px;
+  border: 1px solid #444;
+  background: #2a2a2a;
+  color: #fff;
+  font-size: 0.9rem;
+}
+
+.detail-list {
+  margin-top: 0.5rem;
+}
+
+.detail-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.65rem 0;
+  border-bottom: 1px solid #2a2a2a;
+  cursor: pointer;
+}
+
+.detail-list .detail-row:last-child {
+  border-bottom: none;
+}
+
+.detail-row-label {
+  font-size: 0.9rem;
+}
+
+.detail-row:has(input:disabled) {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.switch {
+  position: relative;
+  flex: 0 0 auto;
+  width: 42px;
+  height: 25px;
+}
+
+.switch input {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.switch input:disabled {
+  cursor: not-allowed;
+}
+
+.switch-track {
+  position: absolute;
+  inset: 0;
+  background: #555;
+  border-radius: 999px;
+  transition: background 0.15s ease;
+}
+
+.switch-track::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 21px;
+  height: 21px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.15s ease;
+}
+
+.switch input:checked + .switch-track {
+  background: #e25822;
+}
+
+.switch input:checked + .switch-track::before {
+  transform: translateX(17px);
+}
+
+/* ---------- Geocoder Place Search bar ---------- */
+
+.search-container {
+  position: absolute;
+  top: max(10px, calc(env(safe-area-inset-top) + 10px));
+  left: max(10px, env(safe-area-inset-left));
+  width: 260px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+}
+
+.search-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: #1b1b1b;
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+
+#search-input {
+  width: 100%;
+  padding: 0.65rem 2.5rem 0.65rem 0.75rem;
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 0.9rem;
+  outline: none;
+}
+
+#search-input::placeholder {
+  color: #888;
+}
+
+#search-btn {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  border: none;
+  color: #ccc;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  padding: 0;
+}
+
+#search-btn:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+#search-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.search-results {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  background: #1b1b1b;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid #2d2d2d;
+  display: flex;
+  flex-direction: column;
+}
+
+.search-results li {
+  padding: 0.65rem 0.75rem;
+  font-size: 0.85rem;
+  color: #ccc;
+  cursor: pointer;
+  border-bottom: 1px solid #2d2d2d;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.search-results li:last-child {
+  border-bottom: none;
+}
+
+.search-results li:hover {
+  background: #2d2d2d;
+  color: #fff;
+}
+
+@media (max-width: 768px) {
+  .search-container {
+    width: calc(100% - 74px); /* Leave room for layers button */
+  }
 }

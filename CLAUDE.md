@@ -53,12 +53,24 @@ pipelines feeding independent, always-present map layers (toggled via
   tile matrix). The two toggle checkboxes in the toolbar just flip
   `visibility` on the corresponding layer(s); see `applyModeVisibility()`
   in `main.ts`.
-- **Past fires** (by year) still use the original **WFS vector** pipeline:
-  `fetchHistoricalFires(year)` in `effis.ts` returns GeoJSON, which
-  `main.ts` puts on a `geojson` source (`fires`) rendered as a fill +
-  outline layer, clickable for a details popup. There's no historical
-  equivalent of "active fires" (hotspots) — hotspot detections are
-  inherently a *current* concept.
+- **Past fires** (by year) render as *two* layers at once, deliberately —
+  see "Past fires: WFS *and* WMTS, on purpose" below for why:
+  - The original **WFS vector** pipeline: `fetchHistoricalFires(year)` in
+    `effis.ts` returns GeoJSON, which `main.ts` puts on a `geojson` source
+    (`fires`) rendered as a fill + outline layer, clickable for a details
+    popup (date/area/country/province). This is the only source of
+    per-fire click details, but has never once succeeded in any testing —
+    it's kept wired up on the chance EFFIS's WFS reliability improves, not
+    because it currently works.
+  - A **WMTS raster** layer (`PAST_FIRES_LAYER_ID`, added in map.ts's
+    `addPastFiresLayer()`), using `modis.ba.<year>` — confirmed reliably
+    working, but only for 2016 onward (`EARLIEST_WMTS_YEAR` in effis.ts)
+    and with no per-fire click data available (see below). `main.ts`'s
+    `setPastFiresYear()` repoints this layer's tiles whenever the selected
+    year changes, via MapLibre's `RasterTileSource.setTiles()`.
+
+  There's no historical equivalent of "active fires" (hotspots) — hotspot
+  detections are inherently a *current* concept.
 
 **EFFIS WFS vs WMS vs WMTS: WFS doesn't work, and neither does WMS for
 current-fires tiles — WMTS is the one that actually does.** EFFIS exposes
@@ -93,10 +105,32 @@ layer hangs on every request" conclusion was real but incomplete: it's
 specific to *WMS*. WMTS, at the right mount, doesn't have this problem.
 Current fires now use WMTS exclusively (`src/effis.ts`'s `tileTemplate()`,
 proxied via `api/wmts.ts` — see below); WMS is no longer used anywhere in
-this codebase. Past fires stay on WFS because no per-year historical access
-path has been *confirmed* working — but see the note in "Known unknowns"
-below, since this same HAR raises a real possibility that WMTS could
-replace WFS there too.
+this codebase.
+
+**Past fires: WFS *and* WMTS, on purpose — not a migration, a deliberate
+pairing.** Once WMTS proved reliable for *current* fires, the obvious next
+question was whether `modis.ba.<year>` (the per-year layer EFFIS's own
+viewer uses for past years, and the one this file long assumed hung like
+everything else time-scoped) would work too if requested against the
+*correct* mount (`/effist/wmts`) instead of wherever it was tested before.
+It does: `modis.ba.2016` through `modis.ba.2025` (2015 and earlier 400 —
+that's the actual lower bound, not a guess) each return genuinely different
+image data, confirmed by decoding and comparing tiles across several years
+side by side, not just checking that requests succeed. So "Past fires"
+could have simply *replaced* WFS with this — except WMTS has no working
+per-feature query here either (`GetFeatureInfo` against a `modis.ba.<year>`
+layer returns the exact same "LayerNotDefined" WMS-style error the old
+current-fires `GetFeatureInfo` attempt got — confirmed, not assumed), so a
+pure WMTS replacement would mean losing the click-for-details popup
+(exact date/area/country/province) entirely, forever, even if EFFIS's WFS
+reliability someday improves. Given that tradeoff, both are wired up
+side by side instead (see the data-flow bullets above): WMTS gives a
+reliably-visible layer for 2016+, WFS keeps driving `fetchHistoricalFires`
+and the click popup underneath, dormant more often than not, but ready to
+start working the moment EFFIS's WFS does, with no further code changes
+needed. Years before 2016 look exactly as broken as they always have —
+this didn't regress anything, it only extended coverage where EFFIS
+actually has data.
 
 **Which WMTS layer, specifically, matters a lot.** `WMTS_LAYERS` in
 `src/effis.ts` maps each layer "kind" to its EFFIS WMTS layer identifier —
@@ -290,10 +324,14 @@ update them on its own until the pre-scripts rerun.
 
 - `src/map.ts` — MapLibre init, OpenFreeMap basemap reduced to white +
   black-labels-only, globe projection, default bounds, GISCO country
-  borders, and the burnt-areas/active-fires WMTS raster layers
-  (`addWmtsRasterLayer`, `tileSize: 1024` to match EFFIS's tile matrix).
+  borders, the burnt-areas/active-fires WMTS raster layers
+  (`addWmtsRasterLayer`, `tileSize: 1024` to match EFFIS's tile matrix),
+  and the past-fires WMTS raster layer (`addPastFiresLayer`,
+  `setPastFiresYear`).
 - `src/effis.ts` — EFFIS fetch/parse/filter logic, the `WMTS_LAYERS`
-  config + `tileTemplate()`, and property accessors.
+  config + `tileTemplate()` (current fires) and `pastFiresTileTemplate()`
+  (past fires, 2016+), the WFS pipeline (`fetchHistoricalFires`), and
+  property accessors.
 - `src/borders.ts` — fetches + converts the GISCO country-borders topojson.
 - `src/main.ts` — wires the map, the current/past mode toggle, the
   active-fires/burnt-areas checkboxes, year `<select>`, and click-to-popup
@@ -328,40 +366,35 @@ reflection of the fire situation rather than a loading failure — there's
 no easy way from the client side to distinguish "no fires here" from "this
 tile failed to load" for a raster overlay.
 
-**WMTS may be a working historical/date-filtered path after all — unconfirmed,
-but worth chasing before touching WFS again.** The HAR capture that revealed
-the WMTS endpoint (see above) used `time=2026-06-07/2026-06-14` — a date
-range *weeks before* the HAR's own capture timestamp — and still got real
-image data back, not just "whatever today's data is regardless of the param
-you pass." If EFFIS's WMTS genuinely honors arbitrary past `time=` ranges
-for these `.week` layers, that could finally be the "working historical
-WMS/WMTS pattern" this file has been assuming doesn't exist — which would
-let "Past fires" drop WFS entirely. This has *not* been verified: it's
-equally possible the server ignores `time=` for these layers and always
-serves its latest cached tile regardless of what range is requested (the
-layers' WMTSCapabilities entries declare no `Dimension`/time values at all,
-so there's no capabilities-level confirmation either way). Before acting on
-this, confirm by requesting the *same* tile with two clearly-different
-`time=` ranges (e.g. one from an active fire season, one from mid-winter)
-and checking whether the returned images actually differ.
+**WMTS's per-year `modis.ba.<year>` layers are confirmed working for "Past
+fires" (2016+)** — see "Past fires: WFS *and* WMTS, on purpose" above for
+the full story. This resolves what used to be an open question right here
+about whether EFFIS's WMTS honors arbitrary `time=` ranges: it turned out
+the year-layers don't use `time=` at all (the year's baked into the layer
+name, e.g. `modis.ba.2023`), so that specific question — does `time=`
+really filter, or does the server ignore it and always serve latest — is
+still unresolved for the `.week` layers specifically, just no longer
+relevant to how past fires got fixed.
 
-WMS `GetFeatureInfo` (which would let users click a current-fire tile for
-details, mirroring the popup that already works for "Past fires") was
-tested against the old WMS endpoint and found unreliable — every
-`INFO_FORMAT` tried either hung or returned an "unsupported format" error,
-with no format found that actually returns data. It's not wired up for
-that reason. WMTS's own `ResourceURL resourceType="FeatureInfo"` templates
-(visible in `/effist/wmts/1.0.0/WMTSCapabilities.xml`) haven't been tried at
-all — they're a more promising untested lead than the old WMS path, now
-that WMTS itself has proven reliable for tile data.
+`GetFeatureInfo` doesn't work against WMTS either — tried against both a
+`.week` layer and a `modis.ba.<year>` layer, both returned the identical
+"LayerNotDefined" WMS-style error the old current-fires WMS attempt got.
+So there's now confirmation across three attempts (WMS GetFeatureInfo,
+WMTS GetFeatureInfo on a `.week` layer, WMTS GetFeatureInfo on a year
+layer) that this backend has no working per-feature query path at all,
+raster or otherwise — not just an unlucky parameter combination. If EFFIS
+ever adds one, it'd remove the whole reason WFS is still kept wired up
+for "Past fires" (see above).
 
 EFFIS's WFS field names/casing (used for "Past fires") were taken from
 EFFIS's own published documentation, not guessed, but have never been
 confirmed against a live successful response — every WFS request made
 during development hung or errored, including EFFIS's own documented
-zero-parameter example. If you're debugging a "Past fires" data issue,
-check the network tab for the actual `feature.properties` shape before
-assuming the code is wrong.
+zero-parameter example, and a fresh unfiltered-fallback request tested
+2026-07-25 still hung for the full 25s with no response. If you're
+debugging a "Past fires" data issue, check the network tab for the actual
+`feature.properties` shape before assuming the code is wrong — assuming
+WFS ever actually returns something to check in the first place.
 
 **Requests through either production proxy have been observed hanging even
 when EFFIS itself is fine.** Diagnosing a spell of all-layers-503/504 in

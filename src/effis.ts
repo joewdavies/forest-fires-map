@@ -1,5 +1,6 @@
 import type shp from "shpjs";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
+import { t } from "./i18n";
 
 // EFFIS (European Forest Fire Information System) burnt-area/fire layers.
 // Docs: https://forest-fire.emergency.copernicus.eu/applications/data-and-services
@@ -15,10 +16,23 @@ import type { Feature, FeatureCollection, Geometry } from "geojson";
 // to be what it actually uses for the current-situation view — see the
 // "Current fires: WMTS raster tiles" section below for exactly which
 // layers and why (notably: WMS, tried first, hangs on these same layers).
-// Past fires still go through WFS below, since there's no per-year WMTS/WMS
-// layer confirmed working for historical dates (`modis.ba.<year>` WMTS and
-// `TIME`-filtered WMS both hung in testing) — only the *current*-week WMTS
-// layers have been confirmed to accept a `time=` range successfully.
+// Past fires primarily go through WFS below — kept as the primary path
+// deliberately, not for lack of a working alternative. `modis.ba.<year>` WMTS
+// layers (2016-2025, confirmed live on 2026-07-25 — each year genuinely
+// returns different image data, verified by decoding and comparing the PNGs,
+// not just checking HTTP status) *do* work and are wired up as
+// `pastFiresTileTemplate()` below, giving a reliable raster visual for that
+// range. But WMTS has no working per-feature query (`GetFeatureInfo` returns
+// the same "LayerNotDefined" error WMS gave — confirmed, not assumed) and
+// covers only 2016 onward, whereas WFS — despite hanging on every request
+// tested — carries per-fire date/area/country/province for click popups and
+// isn't inherently year-limited. So both are wired up side by side: the WMTS
+// raster layer as a reliably-visible base (2016+, see `EARLIEST_WMTS_YEAR`),
+// and the WFS vector fetch still driving `fetchHistoricalFires` underneath
+// for whenever it succeeds — a conscious choice over deleting the vector
+// pipeline, since click-level detail is worth keeping wired up even at low
+// odds of the request succeeding today. If EFFIS's WFS reliability ever
+// improves, click popups start working with no further changes needed.
 const EFFIS_PROXY = "/api/effis";
 const LAYER = "ms:modis.ba.poly";
 
@@ -67,9 +81,8 @@ async function requestBurntAreas(cqlFilter?: string): Promise<FeatureCollection>
     const timedOut = err instanceof Error && err.name === "TimeoutError";
     throw new EffisError(
       timedOut
-        ? "EFFIS did not respond in time. The service may be overloaded — try again shortly."
-        : `Could not reach EFFIS (${err instanceof Error ? err.message : String(err)}). ` +
-          "The service may be temporarily unavailable — try again shortly.",
+        ? t("error_timeout")
+        : t("error_reachability", { error: err instanceof Error ? err.message : String(err) })
     );
   }
 
@@ -78,9 +91,9 @@ async function requestBurntAreas(cqlFilter?: string): Promise<FeatureCollection>
     // WFS servers report errors as an XML ServiceExceptionReport with a 200
     // or as a plain HTTP error — surface whichever this is directly.
     const detail = await response.text().catch(() => "");
+    const formattedDetail = detail ? ` Details: ${detail.replace(/\s+/g, " ").slice(0, 200)}` : "";
     throw new EffisError(
-      `EFFIS returned an error (HTTP ${response.status}). The service may be temporarily unavailable — try again shortly.` +
-        (detail ? ` Details: ${detail.replace(/\s+/g, " ").slice(0, 200)}` : ""),
+      t("error_http", { status: response.status, detail: formattedDetail })
     );
   }
 
@@ -95,8 +108,7 @@ async function requestBurntAreas(cqlFilter?: string): Promise<FeatureCollection>
     return normalize(await parseShapefile(buffer));
   } catch (err) {
     throw new EffisError(
-      `Received a response from EFFIS but couldn't parse it as shapefile data ` +
-        `(${err instanceof Error ? err.message : String(err)}).`,
+      t("error_parse", { error: err instanceof Error ? err.message : String(err) })
     );
   }
 }
@@ -228,6 +240,31 @@ export function tileTemplate(kind: WmtsLayerKind): string {
   // {z}/{x}/{y} must stay literal (not URL-encoded) for MapLibre to find
   // and substitute them, so they're appended after URLSearchParams rather
   // than passed through it.
+  return `${EFFIS_WMTS_PROXY}?${params.toString()}&TileMatrix={z}&TileCol={x}&TileRow={y}`;
+}
+
+// --- Past fires: WMTS raster tiles (2016+), alongside WFS above ------
+//
+// `modis.ba.<year>` is a *different* WMTS layer family from the `.week`
+// layers above: the year is baked into the layer name itself (confirmed via
+// WMTSCapabilities — `modis.ba.2016` through `modis.ba.2025` are the only
+// ones that exist; `modis.ba.2015` 400s), so no `time=` range is needed or
+// accepted. It's the one piece of the year-suffixed pattern EFFIS's own
+// viewer uses for past years that CLAUDE.md previously assumed hung like
+// everything else time-scoped — that assumption was formed testing against
+// the wrong upstream mount (`/effis`, not `/effist/wmts`), the same mistake
+// that hid the current-fires WMTS layers for so long.
+export const EARLIEST_WMTS_YEAR = 2016;
+
+export function pastFiresTileTemplate(year: number): string {
+  const params = new URLSearchParams({
+    layer: `modis.ba.${year}`,
+    tilematrixset: "EPSG3857",
+    Service: "WMTS",
+    Request: "GetTile",
+    Version: "1.0.0",
+    Format: "image/png",
+  });
   return `${EFFIS_WMTS_PROXY}?${params.toString()}&TileMatrix={z}&TileCol={x}&TileRow={y}`;
 }
 
