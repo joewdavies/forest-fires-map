@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C /c/Github/forest-fires log --oneline -20)",
+      "Bash(git -C /c/Github/forest-fires remote -v)",
+      "Bash(git -C /c/Github/forest-fires branch -a)",
+      "Bash(git -C /c/Github/forest-fires fetch origin)",
+      "Bash(git -C /c/Github/forest-fires remote show origin)",
+      "Bash(ls -la /c/Github/forest-fires 2>&1)",
+      "Read(//c/Github/forest-fires/**)",
+      "WebFetch(domain:effis.jrc.ec.europa.eu)",
+      "WebFetch(domain:forest-fire.emergency.copernicus.eu)"
+    ]
+  }
+}

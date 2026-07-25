@@ -1,5 +1,4 @@
 import {
-  AttributionControl,
   Map,
   NavigationControl,
   ScaleControl,
@@ -11,7 +10,11 @@ import {
 } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { fetchCountryBorders } from "./borders";
-import { pastFiresTileTemplate, tileTemplate, type WmtsLayerKind } from "./effis";
+import {
+  pastFiresTileTemplate,
+  tileTemplate,
+  type WmtsLayerKind,
+} from "./effis";
 
 // maplibre-gl v6 builds its tile-parsing Web Worker URL dynamically at
 // runtime, which Vite can't statically analyze to bundle as an asset (the
@@ -46,20 +49,31 @@ const DEFAULT_BOUNDS: LngLatBoundsLike = [
 
 type Style = ReturnType<Map["getStyle"]>;
 
-export async function createMap(container: HTMLElement): Promise<Map> {
+export async function createMap(
+  container: HTMLElement,
+  initialBasemap: BasemapKind = "plain",
+): Promise<Map> {
   const map = new Map({
     container,
-    style: await loadStrippedStyle(),
+    style: await styleForBasemap(initialBasemap),
     bounds: DEFAULT_BOUNDS,
     fitBoundsOptions: { padding: 20 },
-    // The default auto-added attribution control is always expanded
-    // regardless of map width; disable it and add our own compact one
-    // instead (collapsed to a small "i" icon, expanding on click/hover).
+    // Attribution and data-source links are provided in the app's info modal.
     attributionControl: false,
   });
 
   map.on("load", () => {
-    addCountryBorders(map, "plain");
+    map.setProjection({ type: "globe" });
+    if (initialBasemap === "3d") {
+      map.setPitch(60);
+      map.setBearing(30);
+      map.dragRotate.enable();
+    } else {
+      map.setPitch(0);
+      map.setBearing(0);
+      map.dragRotate.disable();
+    }
+    addCountryBorders(map, initialBasemap);
     addBurntAreasLayers(map);
     addActiveFiresLayers(map);
     addPastFiresLayer(map);
@@ -67,51 +81,8 @@ export async function createMap(container: HTMLElement): Promise<Map> {
 
   map.addControl(new NavigationControl({ showCompass: false }), "top-right");
   map.addControl(new ScaleControl(), "bottom-left");
-  map.addControl(new AttributionControl({ compact: true }));
-  collapseAttributionControl(container);
 
   return map;
-}
-
-/**
- * `compact: true` doesn't actually start collapsed — MapLibre's own
- * AttributionControl deliberately shows itself expanded once on the very
- * first render (so users see the attribution at least once), then only
- * auto-collapses the first time the user drags the map. There's no public
- * option to skip that initial reveal. Worse, it re-opens itself *again*
- * every time the computed attribution text changes — which happens once
- * per attributed source we add (GISCO, EFFIS), all added later inside the
- * `load` handler above — so a single one-off cleanup right after
- * `addControl` gets silently undone once those sources register.
- *
- * This reaches into the control's DOM output directly (it's a native
- * `<details>` element) and force-collapses it — clearing the `open`
- * attribute and the `maplibregl-compact-show` class MapLibre's own CSS
- * keys off of — then keeps re-collapsing it via MutationObserver every
- * time MapLibre flips `open` back on its own, until the user actually
- * clicks the control themselves, at which point the observer steps aside
- * and lets normal click-to-expand behaviour take over.
- */
-function collapseAttributionControl(container: HTMLElement): void {
-  const attribution = container.querySelector<HTMLElement>(
-    ".maplibregl-ctrl-attrib",
-  );
-  if (!attribution) return;
-
-  const collapse = () => {
-    attribution.removeAttribute("open");
-    attribution.classList.remove("maplibregl-compact-show");
-  };
-  collapse();
-
-  const observer = new MutationObserver(collapse);
-  observer.observe(attribution, {
-    attributes: true,
-    attributeFilter: ["open"],
-  });
-  attribution
-    .querySelector(".maplibregl-ctrl-attrib-button")
-    ?.addEventListener("click", () => observer.disconnect(), { once: true });
 }
 
 /**
@@ -152,15 +123,56 @@ async function loadStrippedStyle(): Promise<Style | string> {
 let cachedLibertyStyle: Style | null = null;
 
 async function fetchLibertyStyle(): Promise<Style> {
-  cachedLibertyStyle ??= (await (await fetch(OPENFREEMAP_STYLE)).json()) as Style;
+  cachedLibertyStyle ??= (await (
+    await fetch(OPENFREEMAP_STYLE)
+  ).json()) as Style;
   return structuredClone(cachedLibertyStyle);
 }
 
-export type BasemapKind = "plain" | "positron" | "bright" | "liberty" | "dark" | "fiord" | "3d";
+export type BasemapKind =
+  | "plain"
+  | "positron"
+  | "bright"
+  | "liberty"
+  | "dark"
+  | "fiord"
+  | "satellite"
+  | "3d";
+
+// Esri's World Imagery service is the satellite raster basemap previously
+// offered by the app. ArcGIS REST tile URLs use z/y/x ordering.
+const SATELLITE_TILE_URL =
+  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+const SATELLITE_ATTRIBUTION =
+  '&copy; <a href="https://www.esri.com/" target="_blank" rel="noopener">Esri</a>, Maxar, Earthstar Geographics, and the GIS User Community';
+
+function satelliteStyle(): Style {
+  return {
+    version: 8,
+    sources: {
+      "satellite-raster": {
+        type: "raster",
+        tiles: [SATELLITE_TILE_URL],
+        tileSize: 256,
+        attribution: SATELLITE_ATTRIBUTION,
+      },
+    },
+    layers: [
+      {
+        id: "satellite-raster",
+        type: "raster",
+        source: "satellite-raster",
+      },
+    ],
+  };
+}
 
 async function styleForBasemap(kind: BasemapKind): Promise<Style | string> {
   if (kind === "plain") {
     return loadStrippedStyle();
+  }
+  if (kind === "satellite") {
+    return satelliteStyle();
   }
   if (kind === "3d") {
     return "https://tiles.openfreemap.org/styles/liberty";
@@ -189,7 +201,11 @@ async function styleForBasemap(kind: BasemapKind): Promise<Style | string> {
  * style's URL failed to fetch) fires first, so a failed switch rejects
  * instead of leaving the caller awaiting forever.
  */
-export function setBasemap(map: Map, kind: BasemapKind, placeLabelsEnabled: boolean): Promise<void> {
+export function setBasemap(
+  map: Map,
+  kind: BasemapKind,
+  placeLabelsEnabled: boolean,
+): Promise<void> {
   return styleForBasemap(kind).then(
     (style) =>
       new Promise<void>((resolve, reject) => {
@@ -273,7 +289,10 @@ function stripToPlaceLabelsOnly(style: Style): void {
  * HIDDEN_PLACE_LABEL_IDS) on or off, without touching anything else.
  * Queries the live style rather than caching ids from `stripToPlaceLabelsOnly`
  * so it stays correct if that function's set of kept layers ever changes. */
-export async function setPlaceLabelsVisible(map: Map, visible: boolean): Promise<void> {
+export async function setPlaceLabelsVisible(
+  map: Map,
+  visible: boolean,
+): Promise<void> {
   const currentStyle = map.getStyle();
   if (!currentStyle) return;
 
@@ -293,7 +312,9 @@ export async function setPlaceLabelsVisible(map: Map, visible: boolean): Promise
           layer["source-layer"] === "place" &&
           !HIDDEN_PLACE_LABEL_IDS.has(layer.id),
       );
-      const isSatellite = currentStyle.layers.some((l) => l.id === "satellite-raster");
+      const isSatellite = currentStyle.layers.some(
+        (l) => l.id === "satellite-raster",
+      );
       for (const layer of placeLayers) {
         if (!map.getLayer(layer.id)) {
           const cloned = structuredClone(layer);
@@ -325,7 +346,8 @@ export async function setPlaceLabelsVisible(map: Map, visible: boolean): Promise
     .layers.filter(
       (layer) =>
         layer.type === "symbol" &&
-        (layer["source-layer"] === "place" || layer["source-layer"] === "place_label") &&
+        (layer["source-layer"] === "place" ||
+          layer["source-layer"] === "place_label") &&
         !HIDDEN_PLACE_LABEL_IDS.has(layer.id),
     )
     .map((layer) => layer.id);

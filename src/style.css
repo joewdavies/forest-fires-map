@@ -362,6 +362,12 @@ body {
   background-image: url('/thumbnails/fiord.png');
 }
 
+.basemap-thumb-satellite {
+  background:
+    radial-gradient(circle at 30% 30%, #6b8f4e, transparent 55%),
+    radial-gradient(circle at 70% 60%, #4a6b3a, transparent 55%), #3d5a34;
+}
+
 .basemap-thumb-3d {
   background-image: url('/thumbnails/3d.png');
 }
@@ -402,20 +408,30 @@ body {
 }
 
 .detail-list {
-  margin-top: 0.5rem;
+  margin-top: 0.3rem;
 }
 
 .detail-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.65rem 0;
+  padding: 0.4rem 0;
   border-bottom: 1px solid #2a2a2a;
   cursor: pointer;
 }
 
 .detail-list .detail-row:last-child {
   border-bottom: none;
+}
+
+.fire-layer-list .detail-row {
+  border-bottom: none;
+}
+
+.place-label-list {
+  margin-top: 0.15rem;
+  padding-top: 0.15rem;
+  border-top: 1px solid #2a2a2a;
 }
 
 .detail-row-label {
@@ -929,15 +945,33 @@ body {
 
 @media (max-width: 768px) {
   .legend-card {
-    right: 50%;
-    transform: translate(50%, 10px);
-    bottom: 80px;
-    width: calc(100% - 32px);
-    max-width: 280px;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    max-width: none;
+    max-height: min(42vh, 280px);
+    padding-bottom: env(safe-area-inset-bottom);
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 14px 14px 0 0;
+    transform: translateY(100%);
   }
 
   .legend-card.open {
-    transform: translate(50%, 0);
+    transform: translateY(0);
+  }
+
+  .legend-body {
+    flex-direction: row;
+    align-items: flex-start;
+    overflow-x: auto;
+    overflow-y: auto;
+  }
+
+  .legend-item {
+    min-width: min(180px, calc(50vw - 1rem));
+    flex: 1 0 auto;
   }
 }
 

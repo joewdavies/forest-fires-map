@@ -1,10 +1,10 @@
 {
   "activeFires": {
     "colors": [
-      {"color": "#BE00FF", "label": "<= 6 hours"},
-      {"color": "#FFB4C8", "label": ">6 and <=12 hours"},
-      {"color": "#FF0000", "label": ">12 and <=24 hours"},
-      {"color": "#FF7F00", "label": "last 7 days"}
+      {"color": "#BE00FF", "label": "≤6 h"},
+      {"color": "#FFB4C8", "label": "6–12 h"},
+      {"color": "#FF0000", "label": "12–24 h"},
+      {"color": "#FF7F00", "label": "Last 7 days"}
     ],
     "shapes": [
       {"shape": "triangle", "label": "MODIS"},

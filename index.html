@@ -179,6 +179,10 @@
                 <span class="basemap-thumb basemap-thumb-fiord"></span>
                 <span class="basemap-label" data-i18n="basemap_fiord">Fiord</span>
               </button>
+              <button type="button" class="basemap-option" data-basemap="satellite" role="radio" aria-checked="false">
+                <span class="basemap-thumb basemap-thumb-satellite"></span>
+                <span class="basemap-label" data-i18n="basemap_satellite">Satellite</span>
+              </button>
               <button type="button" class="basemap-option" data-basemap="3d" role="radio" aria-checked="false">
                 <span class="basemap-thumb basemap-thumb-3d"></span>
                 <span class="basemap-label" data-i18n="basemap_3d">3D</span>
@@ -198,7 +202,7 @@
             </div>
             <select id="year-select" hidden></select>
 
-            <div id="layer-toggle" class="detail-list" role="group" data-i18n-aria-label="aria_fire_layers" aria-label="Fire layers">
+            <div id="layer-toggle" class="detail-list fire-layer-list" role="group" data-i18n-aria-label="aria_fire_layers" aria-label="Fire layers">
               <label class="detail-row">
                 <span class="detail-row-label" data-i18n="active_fires">Active fires</span>
                 <span class="switch">
@@ -215,7 +219,7 @@
               </label>
             </div>
 
-            <div class="detail-list">
+            <div class="detail-list place-label-list">
               <label class="detail-row">
                 <span class="detail-row-label" data-i18n="place_names">Place names</span>
                 <span class="switch">

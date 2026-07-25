@@ -1,6 +1,13 @@
-import { initTranslations, t, getLanguage, setLanguage, type Language } from "./i18n";
+import {
+  initTranslations,
+  t,
+  getLanguage,
+  setLanguage,
+  type Language,
+} from "./i18n";
 import "./style.css";
 import legendConfig from "./legend-config.json";
+import config from "../config.json";
 import {
   Popup,
   type GeoJSONSource,
@@ -43,50 +50,93 @@ const currentBtn = document.getElementById("mode-current") as HTMLButtonElement;
 const pastBtn = document.getElementById("mode-past") as HTMLButtonElement;
 const yearSelect = document.getElementById("year-select") as HTMLSelectElement;
 const layerToggle = document.getElementById("layer-toggle") as HTMLElement;
-const activeFiresCheckbox = document.getElementById("toggle-active-fires") as HTMLInputElement;
-const burntAreasCheckbox = document.getElementById("toggle-burnt-areas") as HTMLInputElement;
-const placeLabelsCheckbox = document.getElementById("toggle-place-labels") as HTMLInputElement;
+const activeFiresCheckbox = document.getElementById(
+  "toggle-active-fires",
+) as HTMLInputElement;
+const burntAreasCheckbox = document.getElementById(
+  "toggle-burnt-areas",
+) as HTMLInputElement;
+const placeLabelsCheckbox = document.getElementById(
+  "toggle-place-labels",
+) as HTMLInputElement;
 
 const layersBtn = document.getElementById("layers-btn") as HTMLButtonElement;
 const layersSheet = document.getElementById("layers-sheet") as HTMLElement;
-const sheetCloseBtn = document.getElementById("sheet-close") as HTMLButtonElement;
+const sheetCloseBtn = document.getElementById(
+  "sheet-close",
+) as HTMLButtonElement;
 const sheetBackdrop = document.getElementById("sheet-backdrop") as HTMLElement;
-const basemapOptions = document.querySelectorAll(".basemap-option") as NodeListOf<HTMLButtonElement>;
+const basemapOptions = document.querySelectorAll(
+  ".basemap-option",
+) as NodeListOf<HTMLButtonElement>;
 const compassBtn = document.getElementById("compass-btn") as HTMLButtonElement;
-const compassNeedle = document.getElementById("compass-needle") as SVGElement | null;
+const compassNeedle = document.getElementById(
+  "compass-needle",
+) as SVGElement | null;
 
-const searchContainer = document.getElementById("search-container") as HTMLElement;
+const searchContainer = document.getElementById(
+  "search-container",
+) as HTMLElement;
 const searchInput = document.getElementById("search-input") as HTMLInputElement;
 const searchBtn = document.getElementById("search-btn") as HTMLButtonElement;
-const searchResults = document.getElementById("search-results") as HTMLUListElement;
+const searchResults = document.getElementById(
+  "search-results",
+) as HTMLUListElement;
 
 const langBtn = document.getElementById("lang-btn") as HTMLButtonElement;
 const langMenu = document.getElementById("lang-menu") as HTMLElement;
-const langOptions = document.querySelectorAll(".lang-option") as NodeListOf<HTMLButtonElement>;
+const langOptions = document.querySelectorAll(
+  ".lang-option",
+) as NodeListOf<HTMLButtonElement>;
 
 const aboutBtn = document.getElementById("about-btn") as HTMLButtonElement;
 const aboutModal = document.getElementById("about-modal") as HTMLElement;
-const aboutCloseBtn = document.getElementById("about-close") as HTMLButtonElement;
+const aboutCloseBtn = document.getElementById(
+  "about-close",
+) as HTMLButtonElement;
 
 const legendBtn = document.getElementById("legend-btn") as HTMLButtonElement;
 const legendCard = document.getElementById("legend-card") as HTMLElement;
-const legendCloseBtn = document.getElementById("legend-close") as HTMLButtonElement;
+const legendCloseBtn = document.getElementById(
+  "legend-close",
+) as HTMLButtonElement;
 
-const activeFiresImg = document.getElementById("legend-img-active-fires") as HTMLImageElement | null;
-const activeFiresFallback = document.getElementById("legend-fallback-active-fires") as HTMLElement | null;
-const burntAreasImg = document.getElementById("legend-img-burnt-areas") as HTMLImageElement | null;
-const burntAreasFallback = document.getElementById("legend-fallback-burnt-areas") as HTMLElement | null;
+const activeFiresImg = document.getElementById(
+  "legend-img-active-fires",
+) as HTMLImageElement | null;
+const activeFiresFallback = document.getElementById(
+  "legend-fallback-active-fires",
+) as HTMLElement | null;
+const burntAreasImg = document.getElementById(
+  "legend-img-burnt-areas",
+) as HTMLImageElement | null;
+const burntAreasFallback = document.getElementById(
+  "legend-fallback-burnt-areas",
+) as HTMLElement | null;
 
 let mode: Mode = "current";
 let requestId = 0;
-let currentBasemap: BasemapKind = "plain";
+let currentBasemap: BasemapKind =
+  (config.defaultBasemap as BasemapKind) || "plain";
 
 populateYearSelect();
 
 initTranslations();
 
-const map = await createMap(mapContainer);
-const popup = new Popup({ closeButton: true, closeOnClick: true, maxWidth: "280px" });
+const map = await createMap(mapContainer, currentBasemap);
+const popup = new Popup({
+  closeButton: true,
+  closeOnClick: true,
+  maxWidth: "280px",
+});
+
+// Set initial basemap selection in UI
+for (const option of basemapOptions) {
+  option.setAttribute(
+    "aria-checked",
+    String(option.dataset.basemap === currentBasemap),
+  );
+}
 
 map.on("load", () => {
   addFireLayer(map);
@@ -199,8 +249,12 @@ let sheetIsDragging = false;
 layersSheet.addEventListener("touchstart", (e) => {
   const touch = e.touches[0];
   const target = e.target as HTMLElement;
-  const isHandle = target.classList.contains("sheet-handle") || target.closest(".sheet-handle");
-  const isHeader = target.classList.contains("sheet-header") || target.closest(".sheet-header");
+  const isHandle =
+    target.classList.contains("sheet-handle") ||
+    target.closest(".sheet-handle");
+  const isHeader =
+    target.classList.contains("sheet-header") ||
+    target.closest(".sheet-header");
   const contentEl = layersSheet.querySelector(".sheet-content") as HTMLElement;
   const isContentAtTop = contentEl ? contentEl.scrollTop === 0 : true;
 
@@ -210,18 +264,22 @@ layersSheet.addEventListener("touchstart", (e) => {
     sheetIsDragging = true;
     layersSheet.style.transition = "none";
   }
-}, { passive: true });
+});
 
-layersSheet.addEventListener("touchmove", (e) => {
-  if (!sheetIsDragging) return;
-  const touch = e.touches[0];
-  sheetCurrentY = touch.clientY;
-  const deltaY = sheetCurrentY - sheetStartY;
+layersSheet.addEventListener(
+  "touchmove",
+  (e) => {
+    if (!sheetIsDragging) return;
+    const touch = e.touches[0];
+    sheetCurrentY = touch.clientY;
+    const deltaY = sheetCurrentY - sheetStartY;
 
-  if (deltaY > 0) {
-    layersSheet.style.transform = `translateY(${deltaY}px)`;
-  }
-}, { passive: true });
+    if (deltaY > 0) {
+      layersSheet.style.transform = `translateY(${deltaY}px)`;
+    }
+  },
+  { passive: true },
+);
 
 layersSheet.addEventListener("touchend", () => {
   if (!sheetIsDragging) return;
@@ -268,7 +326,10 @@ async function handleBasemapChange(kind: BasemapKind) {
 
   currentBasemap = kind;
   for (const option of basemapOptions) {
-    option.setAttribute("aria-checked", String(option.dataset.basemap === kind));
+    option.setAttribute(
+      "aria-checked",
+      String(option.dataset.basemap === kind),
+    );
   }
 
   addFireLayer(map);
@@ -309,20 +370,33 @@ function setMode(next: Mode) {
 function applyModeVisibility() {
   const burntAreasVisible = mode === "current" && burntAreasCheckbox.checked;
   for (const id of BURNT_AREAS_LAYER_IDS) {
-    map.setLayoutProperty(id, "visibility", burntAreasVisible ? "visible" : "none");
+    map.setLayoutProperty(
+      id,
+      "visibility",
+      burntAreasVisible ? "visible" : "none",
+    );
   }
 
   const activeFiresVisible = mode === "current" && activeFiresCheckbox.checked;
   for (const id of ACTIVE_FIRES_LAYER_IDS) {
-    map.setLayoutProperty(id, "visibility", activeFiresVisible ? "visible" : "none");
+    map.setLayoutProperty(
+      id,
+      "visibility",
+      activeFiresVisible ? "visible" : "none",
+    );
   }
 
   const pastVisibility = mode === "past" ? "visible" : "none";
   map.setLayoutProperty(FIRE_FILL_LAYER, "visibility", pastVisibility);
   map.setLayoutProperty(FIRE_OUTLINE_LAYER, "visibility", pastVisibility);
 
-  const pastRasterVisible = mode === "past" && Number(yearSelect.value) >= EARLIEST_WMTS_YEAR;
-  map.setLayoutProperty(PAST_FIRES_LAYER_ID, "visibility", pastRasterVisible ? "visible" : "none");
+  const pastRasterVisible =
+    mode === "past" && Number(yearSelect.value) >= EARLIEST_WMTS_YEAR;
+  map.setLayoutProperty(
+    PAST_FIRES_LAYER_ID,
+    "visibility",
+    pastRasterVisible ? "visible" : "none",
+  );
 }
 
 function emptyCollection(): FeatureCollection {
@@ -357,7 +431,10 @@ async function loadFires() {
   } catch (err) {
     if (thisRequest !== requestId) return;
     source.setData(emptyCollection());
-    setStatus(err instanceof EffisError ? err.message : t("error_load_failed"), "error");
+    setStatus(
+      err instanceof EffisError ? err.message : t("error_load_failed"),
+      "error",
+    );
   }
 }
 
@@ -398,7 +475,7 @@ searchInput.addEventListener("input", () => {
   if (searchTimeoutId) {
     clearTimeout(searchTimeoutId);
   }
-  
+
   const query = searchInput.value.trim();
   if (query.length < 2) {
     searchResults.hidden = true;
@@ -414,7 +491,7 @@ searchInput.addEventListener("input", () => {
           headers: {
             "User-Agent": "European-Forest-Fires-Map-App",
           },
-        }
+        },
       );
       if (!response.ok) throw new Error("Search failed");
       const data = (await response.json()) as GeocodeResult[];
@@ -488,7 +565,7 @@ async function performInstantSearch() {
         headers: {
           "User-Agent": "European-Forest-Fires-Map-App",
         },
-      }
+      },
     );
     if (!response.ok) return;
     const data = (await response.json()) as GeocodeResult[];
@@ -549,7 +626,11 @@ document.addEventListener("keydown", (e) => {
 });
 
 document.addEventListener("click", (e) => {
-  if (!langMenu.hidden && !langBtn.contains(e.target as Node) && !langMenu.contains(e.target as Node)) {
+  if (
+    !langMenu.hidden &&
+    !langBtn.contains(e.target as Node) &&
+    !langMenu.contains(e.target as Node)
+  ) {
     langMenu.hidden = true;
     langBtn.classList.remove("active");
   }
@@ -577,7 +658,7 @@ function closeAboutModal() {
       sheetBackdrop.hidden = true;
       aboutModal.hidden = true;
     },
-    { once: true }
+    { once: true },
   );
 }
 
@@ -599,38 +680,68 @@ document.addEventListener("keydown", (e) => {
 
 function updateLegend() {
   const isCurrentMode = mode === "current";
+  const useCustomLegend = config.legendType === "custom";
 
   // 1. Active fires
   const activeFiresItem = document.getElementById("legend-item-active-fires");
   if (activeFiresItem) {
-    activeFiresItem.style.display = (isCurrentMode && activeFiresCheckbox.checked) ? "flex" : "none";
-    if (activeFiresImg) {
-      activeFiresImg.style.display = "";
-    }
-    if (activeFiresFallback) {
-      activeFiresFallback.hidden = true;
+    activeFiresItem.style.display =
+      isCurrentMode && activeFiresCheckbox.checked ? "flex" : "none";
+
+    if (useCustomLegend) {
+      // Use custom legend
+      if (activeFiresImg) {
+        activeFiresImg.style.display = "none";
+      }
+      if (activeFiresFallback) {
+        activeFiresFallback.hidden = false;
+        renderActiveFiresFallback();
+      }
+    } else {
+      // Use WMS PNG
+      if (activeFiresImg) {
+        activeFiresImg.style.display = "";
+      }
+      if (activeFiresFallback) {
+        activeFiresFallback.hidden = true;
+      }
     }
   }
 
   // 2. Burnt areas / Past fires
   const burntAreasItem = document.getElementById("legend-item-burnt-areas");
   if (burntAreasItem) {
-    if (burntAreasImg) {
-      burntAreasImg.style.display = "";
-    }
-    if (burntAreasFallback) {
-      burntAreasFallback.hidden = true;
+    if (useCustomLegend) {
+      // Use custom legend
+      if (burntAreasImg) {
+        burntAreasImg.style.display = "none";
+      }
+      if (burntAreasFallback) {
+        burntAreasFallback.hidden = false;
+        renderBurntAreasFallback();
+      }
+    } else {
+      // Use WMS PNG
+      if (burntAreasImg) {
+        burntAreasImg.style.display = "";
+      }
+      if (burntAreasFallback) {
+        burntAreasFallback.hidden = true;
+      }
     }
 
     if (isCurrentMode) {
-      burntAreasItem.style.display = burntAreasCheckbox.checked ? "flex" : "none";
+      burntAreasItem.style.display = burntAreasCheckbox.checked
+        ? "flex"
+        : "none";
       const labelEl = document.getElementById("legend-title-burnt-areas");
       if (labelEl) {
         labelEl.setAttribute("data-i18n", "burnt_areas");
         labelEl.textContent = t("burnt_areas");
       }
-      if (burntAreasImg) {
-        burntAreasImg.src = "/api/effis?service=WMS&request=GetLegendGraphic&layer=modis.ba.week&format=image/png";
+      if (burntAreasImg && !useCustomLegend) {
+        burntAreasImg.src =
+          "/api/effis?service=WMS&request=GetLegendGraphic&layer=modis.ba.week&format=image/png";
       }
     } else {
       burntAreasItem.style.display = "flex";
@@ -639,8 +750,9 @@ function updateLegend() {
         labelEl.removeAttribute("data-i18n");
         labelEl.textContent = `${t("burnt_areas")} (${yearSelect.value})`;
       }
-      if (burntAreasImg) {
-        burntAreasImg.src = "/api/effis?service=WMS&request=GetLegendGraphic&layer=ms:modis.ba.poly&format=image/png";
+      if (burntAreasImg && !useCustomLegend) {
+        burntAreasImg.src =
+          "/api/effis?service=WMS&request=GetLegendGraphic&layer=ms:modis.ba.poly&format=image/png";
       }
     }
   }
@@ -666,7 +778,7 @@ function closeLegendCard() {
     () => {
       legendCard.hidden = true;
     },
-    { once: true }
+    { once: true },
   );
 }
 
