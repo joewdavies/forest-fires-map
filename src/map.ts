@@ -59,7 +59,7 @@ export async function createMap(container: HTMLElement): Promise<Map> {
   });
 
   map.on("load", () => {
-    addCountryBorders(map);
+    addCountryBorders(map, "plain");
     addBurntAreasLayers(map);
     addActiveFiresLayers(map);
     addPastFiresLayer(map);
@@ -205,7 +205,7 @@ export function setBasemap(map: Map, kind: BasemapKind, placeLabelsEnabled: bool
             map.setBearing(0);
             map.dragRotate.disable();
           }
-          addCountryBorders(map);
+          addCountryBorders(map, kind);
           addBurntAreasLayers(map);
           addActiveFiresLayers(map);
           addPastFiresLayer(map);
@@ -337,7 +337,8 @@ export async function setPlaceLabelsVisible(map: Map, visible: boolean): Promise
 
 /** Adds GISCO country border/coastline lines, in black, below the place
  * labels (so text stays legible) but above the (invisible) fill layers. */
-function addCountryBorders(map: Map): void {
+function addCountryBorders(map: Map, kind: BasemapKind): void {
+  if (kind !== "plain") return;
   const firstSymbolLayer = map
     .getStyle()
     .layers.find((layer) => layer.type === "symbol");
