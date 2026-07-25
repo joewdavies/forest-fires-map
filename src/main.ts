@@ -21,6 +21,7 @@ import {
   createMap,
   setBasemap,
   setPastFiresYear,
+  setPlaceLabelsLanguage,
   setPlaceLabelsVisible,
   ACTIVE_FIRES_LAYER_IDS,
   BURNT_AREAS_LAYER_IDS,
@@ -145,7 +146,7 @@ populateYearSelect();
 
 initTranslations();
 
-const map = await createMap(mapContainer, currentBasemap);
+const map = await createMap(mapContainer, currentBasemap, getLanguage());
 const popup = new Popup({
   closeButton: true,
   closeOnClick: true,
@@ -197,7 +198,7 @@ map.on("load", () => {
 
   setPastFiresYear(map, Number(yearSelect.value));
   applyModeVisibility();
-  setPlaceLabelsVisible(map, placeLabelsCheckbox.checked);
+  setPlaceLabelsVisible(map, placeLabelsCheckbox.checked, getLanguage());
   loadFires();
   updateLegend();
 });
@@ -219,7 +220,7 @@ burntAreasCheckbox.addEventListener("change", () => {
   updateLegend();
 });
 placeLabelsCheckbox.addEventListener("change", () => {
-  setPlaceLabelsVisible(map, placeLabelsCheckbox.checked);
+  setPlaceLabelsVisible(map, placeLabelsCheckbox.checked, getLanguage());
   updateLegend();
 });
 
@@ -536,7 +537,7 @@ async function handleBasemapChange(kind: BasemapKind) {
   setMapLoading(true);
   setStatus(t("loading_style"));
   try {
-    await setBasemap(map, kind, placeLabelsCheckbox.checked);
+    await setBasemap(map, kind, placeLabelsCheckbox.checked, getLanguage());
   } catch (err) {
     setMapLoading(false);
     console.warn("Failed to switch basemap:", err);
@@ -557,7 +558,7 @@ async function handleBasemapChange(kind: BasemapKind) {
   updateMeasurementData();
   setPastFiresYear(map, Number(yearSelect.value));
   applyModeVisibility();
-  setPlaceLabelsVisible(map, placeLabelsCheckbox.checked);
+  setPlaceLabelsVisible(map, placeLabelsCheckbox.checked, getLanguage());
   loadFires();
   updateLegend();
 }
@@ -824,6 +825,7 @@ for (const option of langOptions) {
       setLanguage(lang);
       updateActiveLanguageOption();
       refreshMeasurementTooltip();
+      setPlaceLabelsLanguage(map, lang);
       loadFires();
       updateLegend();
     }

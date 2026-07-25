@@ -4,12 +4,14 @@ import {
   ScaleControl,
   setWorkerUrl,
   type ErrorEvent,
+  type ExpressionSpecification,
   type GeoJSONSource,
   type LngLatBoundsLike,
   type RasterTileSource,
 } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { fetchCountryBorders } from "./borders";
+import type { Language } from "./i18n";
 import {
   pastFiresTileTemplate,
   tileTemplate,
@@ -52,10 +54,11 @@ type Style = ReturnType<Map["getStyle"]>;
 export async function createMap(
   container: HTMLElement,
   initialBasemap: BasemapKind = "plain",
+  language: Language = "en",
 ): Promise<Map> {
   const map = new Map({
     container,
-    style: await styleForBasemap(initialBasemap),
+    style: await styleForBasemap(initialBasemap, language),
     bounds: DEFAULT_BOUNDS,
     fitBoundsOptions: { padding: 20 },
     // Attribution and data-source links are provided in the app's info modal.
@@ -77,6 +80,7 @@ export async function createMap(
     addBurntAreasLayers(map);
     addActiveFiresLayers(map);
     addPastFiresLayer(map);
+    setPlaceLabelsLanguage(map, language);
   });
 
   map.addControl(new NavigationControl({ showCompass: false }), "top-right");
@@ -98,7 +102,7 @@ export async function createMap(
  * that flash reintroduced) if this fetch fails — better than the map not
  * loading at all over a transient network hiccup.
  */
-async function loadStrippedStyle(): Promise<Style | string> {
+async function loadStrippedStyle(language: Language): Promise<Style | string> {
   let raw: Style;
   try {
     raw = await fetchLibertyStyle();
@@ -112,6 +116,7 @@ async function loadStrippedStyle(): Promise<Style | string> {
 
   raw.projection = { type: "globe" };
   stripToPlaceLabelsOnly(raw);
+  localizePlaceLabelLayers(raw.layers, language);
   return raw;
 }
 
@@ -167,9 +172,12 @@ function satelliteStyle(): Style {
   };
 }
 
-async function styleForBasemap(kind: BasemapKind): Promise<Style | string> {
+async function styleForBasemap(
+  kind: BasemapKind,
+  language: Language,
+): Promise<Style | string> {
   if (kind === "plain") {
-    return loadStrippedStyle();
+    return loadStrippedStyle(language);
   }
   if (kind === "satellite") {
     return satelliteStyle();
@@ -205,8 +213,9 @@ export function setBasemap(
   map: Map,
   kind: BasemapKind,
   placeLabelsEnabled: boolean,
+  language: Language,
 ): Promise<void> {
-  return styleForBasemap(kind).then(
+  return styleForBasemap(kind, language).then(
     (style) =>
       new Promise<void>((resolve, reject) => {
         const onLoad = async () => {
@@ -225,7 +234,7 @@ export function setBasemap(
           addBurntAreasLayers(map);
           addActiveFiresLayers(map);
           addPastFiresLayer(map);
-          await setPlaceLabelsVisible(map, placeLabelsEnabled);
+          await setPlaceLabelsVisible(map, placeLabelsEnabled, language);
           resolve();
         };
         const onError = (e: ErrorEvent) => {
@@ -292,6 +301,7 @@ function stripToPlaceLabelsOnly(style: Style): void {
 export async function setPlaceLabelsVisible(
   map: Map,
   visible: boolean,
+  language: Language = "en",
 ): Promise<void> {
   const currentStyle = map.getStyle();
   if (!currentStyle) return;
@@ -333,6 +343,7 @@ export async function setPlaceLabelsVisible(
               "text-halo-width": 1.5,
             };
           }
+          localizePlaceLabelLayer(cloned, language);
           map.addLayer(cloned);
         }
       }
@@ -355,6 +366,60 @@ export async function setPlaceLabelsVisible(
   for (const id of ids) {
     map.setLayoutProperty(id, "visibility", visible ? "visible" : "none");
   }
+  setPlaceLabelsLanguage(map, language);
+}
+
+/** Uses a translated OpenMapTiles name when present, falling back to the
+ * feature's local name. Both current (`name:xx`) and legacy (`name_xx`)
+ * field conventions are supported by the public tile source. */
+export function setPlaceLabelsLanguage(
+  map: Map,
+  language: Language,
+): void {
+  const layers = map.getStyle()?.layers ?? [];
+  for (const layer of layers) {
+    if (
+      layer.type === "symbol" &&
+      (layer["source-layer"] === "place" ||
+        layer["source-layer"] === "place_label")
+    ) {
+      map.setLayoutProperty(layer.id, "text-field", localizedName(language));
+    }
+  }
+}
+
+function localizePlaceLabelLayers(
+  layers: Style["layers"],
+  language: Language,
+): void {
+  for (const layer of layers) {
+    localizePlaceLabelLayer(layer, language);
+  }
+}
+
+function localizePlaceLabelLayer(
+  layer: Style["layers"][number],
+  language: Language,
+): void {
+  if (
+    layer.type === "symbol" &&
+    (layer["source-layer"] === "place" ||
+      layer["source-layer"] === "place_label")
+  ) {
+    layer.layout = {
+      ...layer.layout,
+      "text-field": localizedName(language),
+    };
+  }
+}
+
+function localizedName(language: Language): ExpressionSpecification {
+  return [
+    "coalesce",
+    ["get", `name:${language}`],
+    ["get", `name_${language}`],
+    ["get", "name"],
+  ];
 }
 
 /** Adds GISCO country border/coastline lines, in black, below the place
