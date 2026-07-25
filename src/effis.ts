@@ -4,21 +4,21 @@ import type { Feature, FeatureCollection, Geometry } from "geojson";
 // EFFIS (European Forest Fire Information System) burnt-area/fire layers.
 // Docs: https://forest-fire.emergency.copernicus.eu/applications/data-and-services
 //
-// EFFIS exposes this data two ways, and in practice only one of them is
-// reliable: its WFS interface (vector polygons, used below for "Past
-// fires") has been observed hanging or erroring on *any* request — even
-// EFFIS's own documented example with zero extra parameters — regardless
-// of query shape. Its WMS interface (raster tiles, used in map.ts for the
-// current-situation "Burnt areas" / "Active fires" overlays) responds
-// reliably in under a couple of seconds for at least one confirmed layer,
-// and is what EFFIS's own production viewer
-// (forest-fire.emergency.copernicus.eu/apps/effis.csv) actually uses for
-// the current-situation view — see the "Current fires: WMS raster tiles"
-// section below for exactly which layers and why. Past fires still go
-// through WFS below, since there's no per-year WMS layer confirmed working
-// (`modis.ba.<year>` WMTS and `TIME`-filtered WMS both hang the same way
-// WFS does — historical/date-filtered queries specifically seem to be the
-// broken code path on EFFIS's backend, not any particular protocol).
+// EFFIS exposes this data multiple ways, with wildly different reliability.
+// Its WFS interface (vector polygons, used below for "Past fires") has been
+// observed hanging or erroring on *any* request — even EFFIS's own
+// documented example with zero extra parameters — regardless of query
+// shape. Current fires ("Burnt areas" / "Active fires", in map.ts) instead
+// use its WMTS interface (raster tiles, at a separate `/effist/wmts`
+// upstream mount — see api/wmts.ts), confirmed via a HAR capture of EFFIS's
+// own production viewer (forest-fire.emergency.copernicus.eu/apps/effis.csv)
+// to be what it actually uses for the current-situation view — see the
+// "Current fires: WMTS raster tiles" section below for exactly which
+// layers and why (notably: WMS, tried first, hangs on these same layers).
+// Past fires still go through WFS below, since there's no per-year WMTS/WMS
+// layer confirmed working for historical dates (`modis.ba.<year>` WMTS and
+// `TIME`-filtered WMS both hung in testing) — only the *current*-week WMTS
+// layers have been confirmed to accept a `time=` range successfully.
 const EFFIS_PROXY = "/api/effis";
 const LAYER = "ms:modis.ba.poly";
 
@@ -130,91 +130,83 @@ export function fetchHistoricalFires(year: number): Promise<FeatureCollection> {
   );
 }
 
-// --- Current fires: WMS raster tiles ---------------------------------
+// --- Current fires: WMTS raster tiles --------------------------------
 //
 // Two independent overlays, each toggleable in the UI, matching EFFIS's own
 // "Current Situation Viewer" (found by reading its live URL — it encodes
 // its active layers as `?tiles=hsl,modis.hs.week,viirs.all.week,s3.hs.week,
-// modis.ba.week`):
-//   - "Burnt areas": the fire perimeter polygons.
+// modis.ba.week,severity_time.week,nrt.ba.week`):
+//   - "Burnt areas": the fire perimeter/severity polygons.
 //   - "Active fires": hotspot detections (rendered as points/triangles by
-//     the WMS server itself), from three independent satellite sources —
+//     the tile server itself), from three independent satellite sources —
 //     shown together as one "Active fires" toggle, same as EFFIS's default.
 //
-// `modis.ba` ("MODIS/SENTINEL2 (supervised)") was tried first for "burnt
-// areas" — it's a full land-cover classification, not a fire-only layer,
-// so it rendered solid green almost everywhere (most pixels are just
-// "vegetation") instead of highlighting fires. `modis.ba.week`, the layer
-// EFFIS's own viewer actually uses, would be the correct fix, but every
-// `.week`-suffixed layer (burnt areas *and* all three hotspot sources)
-// hung on every request tested — the same broken "anything date/time-
-// scoped" backend path as WFS's cql_filter, WMS TIME params, and WMTS
-// year-layers elsewhere in this file. `severity_time` ("FIRE SEVERITY,
-// weekly updated") is used for burnt areas instead: also EFFIS's own
-// layer (found in the same "BURNT AREAS" app section as modis.ba), and the
-// one WMS layer confirmed to actually respond reliably. The three "Active
-// fires" hotspot layers could *not* be gotten to respond at all during
-// development (every variant hung or 500'd) — they're wired up matching
-// EFFIS's own default layer names on the reasonable bet that it's the same
-// backend flakiness rather than a wrong name, but this is unverified.
-export type WmsLayerKind = "burnt-areas" | "active-fires-modis" | "active-fires-viirs" | "active-fires-s3";
+// This used to go through WMS GetMap (see git history) on the assumption —
+// stated in EFFIS's own layer list above — that every `.week`-suffixed
+// layer hangs on any request, WMS or otherwise. That turned out to be only
+// half true: it's specifically the *WMS* path that hangs on these layers.
+// Capturing a HAR of EFFIS's own viewer while it was successfully
+// rendering showed it never calls WMS for current fires at all — every
+// tile request goes to a *WMTS* endpoint at `/effist/wmts` (note: "effist",
+// not "effis" — a distinct upstream mount, proxied separately in
+// api/wmts.ts), using `Service=WMTS&Request=GetTile` with an explicit
+// `time=<from>/<to>` range, not WMS's `BBOX`. Replaying that exact
+// request shape confirmed every `.week` layer below returns real image
+// data reliably. `viirs.hs.week` (not `viirs.all.week`, despite that being
+// the name in the viewer's own URL bar) is what its actual network calls
+// use — the URL's `tiles=` param and its real requests disagree, and the
+// real requests are what's been verified working.
+export type WmtsLayerKind = "burnt-areas" | "active-fires-modis" | "active-fires-viirs" | "active-fires-s3";
 
-const WMS_LAYERS: Record<WmsLayerKind, { layer: string; mapFile?: string }> = {
-  "burnt-areas": { layer: "severity_time", mapFile: "/mnt/nfs/mapfiles/severity.map" },
-  "active-fires-modis": { layer: "modis.hs.week" },
-  "active-fires-viirs": { layer: "viirs.all.week" },
-  "active-fires-s3": { layer: "s3.hs.week" },
+const WMTS_LAYERS: Record<WmtsLayerKind, string> = {
+  "burnt-areas": "severity_time.week",
+  "active-fires-modis": "modis.hs.week",
+  "active-fires-viirs": "viirs.hs.week",
+  "active-fires-s3": "s3.hs.week",
 };
 
-// A syntactically-valid but never-real URL (RFC 2606 reserves .invalid for
-// exactly this) used as a MapLibre raster tile template. MapLibre
-// substitutes {z}/{x}/{y} into it like any other tile URL; map.ts's
-// `transformRequest` recognises this host and rewrites the request into a
-// real WMS GetMap call before the browser ever fetches it — see
-// `resolveEffisTileRequest` below. The layer kind travels in the path so
-// one transformRequest hook can serve all of them.
-const TILE_TEMPLATE_HOST = "https://effis-tile.invalid";
+const EFFIS_WMTS_PROXY = "/api/wmts";
+const WMTS_TIME_WINDOW_DAYS = 7;
 
-export function tileTemplate(kind: WmsLayerKind): string {
-  return `${TILE_TEMPLATE_HOST}/${kind}/{z}/{x}/{y}`;
+/** EFFIS's `.week` WMTS layers aren't declared with a time Dimension in
+ * their own WMTSCapabilities (no server-advertised default), but the real
+ * viewer still sends an explicit rolling `time=<from>/<to>` range on every
+ * request — mirrored here as "today back 6 days" since that's the only
+ * value confirmed (via the HAR capture) to return current data. */
+function currentTimeRange(): string {
+  const to = new Date();
+  const from = new Date(to);
+  from.setDate(from.getDate() - (WMTS_TIME_WINDOW_DAYS - 1));
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
+  return `${iso(from)}/${iso(to)}`;
 }
 
-const WEB_MERCATOR_ORIGIN_SHIFT = (2 * Math.PI * 6378137) / 2;
-
-function tileToBBox3857(z: number, x: number, y: number): [number, number, number, number] {
-  const tileSize = (WEB_MERCATOR_ORIGIN_SHIFT * 2) / 2 ** z;
-  const minX = -WEB_MERCATOR_ORIGIN_SHIFT + x * tileSize;
-  const maxX = -WEB_MERCATOR_ORIGIN_SHIFT + (x + 1) * tileSize;
-  const maxY = WEB_MERCATOR_ORIGIN_SHIFT - y * tileSize;
-  const minY = WEB_MERCATOR_ORIGIN_SHIFT - (y + 1) * tileSize;
-  return [minX, minY, maxX, maxY];
-}
-
-/** If `url` is one of our placeholder tile requests, returns the real WMS
- * GetMap URL to fetch instead; otherwise returns null. */
-export function resolveEffisTileRequest(url: string): string | null {
-  if (!url.startsWith(TILE_TEMPLATE_HOST)) return null;
-
-  const [kind, zStr, xStr, yStr] = new URL(url).pathname.split("/").filter(Boolean);
-  const config = WMS_LAYERS[kind as WmsLayerKind];
-  if (!config) return null;
-
-  const [minX, minY, maxX, maxY] = tileToBBox3857(Number(zStr), Number(xStr), Number(yStr));
+/**
+ * Builds a MapLibre raster tile URL template for one current-fires layer.
+ * MapLibre substitutes {z}/{x}/{y} into raster tile templates natively, so
+ * — unlike the old WMS/BBOX approach — no transformRequest hook is needed:
+ * EFFIS's WMTS TileMatrix/TileCol/TileRow line up directly with MapLibre's
+ * z/x/y, because its EPSG3857 TileMatrixSet uses the same top-left-origin,
+ * power-of-two grid as any XYZ scheme, just with 1024px tiles instead of
+ * 256px — hence `addWmtsRasterLayer` in map.ts sets the raster source's
+ * `tileSize: 1024` to match (that's what makes MapLibre request the same
+ * z as EFFIS's TileMatrix identifier for a given view; get that mismatched
+ * and tiles would fetch the wrong area, not error).
+ */
+export function tileTemplate(kind: WmtsLayerKind): string {
   const params = new URLSearchParams({
-    SERVICE: "WMS",
-    REQUEST: "GetMap",
-    VERSION: "1.3.0",
-    LAYERS: config.layer,
-    STYLES: "",
-    CRS: "EPSG:3857",
-    WIDTH: "256",
-    HEIGHT: "256",
-    FORMAT: "image/png",
-    TRANSPARENT: "true",
-    BBOX: [minX, minY, maxX, maxY].join(","),
+    layer: WMTS_LAYERS[kind],
+    tilematrixset: "EPSG3857",
+    Service: "WMTS",
+    Request: "GetTile",
+    Version: "1.0.0",
+    Format: "image/png",
+    time: currentTimeRange(),
   });
-  if (config.mapFile) params.set("map", config.mapFile);
-  return `${window.location.origin}${EFFIS_PROXY}?${params.toString()}`;
+  // {z}/{x}/{y} must stay literal (not URL-encoded) for MapLibre to find
+  // and substitute them, so they're appended after URLSearchParams rather
+  // than passed through it.
+  return `${EFFIS_WMTS_PROXY}?${params.toString()}&TileMatrix={z}&TileCol={x}&TileRow={y}`;
 }
 
 /** Minimal shape both geojson.Feature and MapLibre's MapGeoJSONFeature satisfy. */

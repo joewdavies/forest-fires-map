@@ -30,25 +30,28 @@ pipelines feeding independent, always-present map layers (toggled via
 `visibility`, not swapped in place — see `applyModeVisibility()` in
 `main.ts`):
 
-- **Current fires** split into two separately-toggleable **WMS raster tile
+- **Current fires** split into two separately-toggleable **WMTS raster tile
   overlays**, matching EFFIS's own "Current Situation Viewer" (its default
   layer set is visible directly in its URL —
-  `?tiles=hsl,modis.hs.week,viirs.all.week,s3.hs.week,modis.ba.week`):
+  `?tiles=hsl,modis.hs.week,viirs.all.week,s3.hs.week,modis.ba.week,
+  severity_time.week,nrt.ba.week`):
   - **"Burnt areas"** (`BURNT_AREAS_LAYER_ID`, one raster source) — fire
-    perimeter polygons.
+    severity/perimeter polygons.
   - **"Active fires"** (`ACTIVE_FIRES_LAYER_IDS`, three raster sources
     stacked) — hotspot detections from three independent satellite
-    sources, rendered as points/triangles by the WMS server itself.
+    sources, rendered as points/triangles by the tile server itself.
 
   Both are added in `map.ts`'s `addBurntAreasLayer()` /
   `addActiveFiresLayers()`. No fetch/parsing code of ours is involved for
-  either — MapLibre requests tiles on demand like any raster source.
-  `effis.ts`'s `resolveEffisTileRequest()` + `map.ts`'s `transformRequest`
-  adapt MapLibre's `{z}/{x}/{y}` tile grid into WMS `GetMap` calls (MapLibre
-  has no native WMS support, so this is the standard adapter pattern — see
-  the "EFFIS WFS vs WMS" note below for why WMS specifically). The two
-  toggle checkboxes in the toolbar just flip `visibility` on the
-  corresponding layer(s); see `applyModeVisibility()` in `main.ts`.
+  either — MapLibre requests tiles on demand like any raster source, and
+  needs no custom adapter here: `effis.ts`'s `tileTemplate()` builds a
+  standard `{z}/{x}/{y}` MapLibre raster tile template pointed at EFFIS's
+  WMTS `GetTile` endpoint, and MapLibre substitutes those natively (see the
+  "EFFIS WFS vs WMS vs WMTS" note below for why WMTS specifically, and for
+  the `tileSize: 1024` detail that makes `{z}/{x}/{y}` line up with EFFIS's
+  tile matrix). The two toggle checkboxes in the toolbar just flip
+  `visibility` on the corresponding layer(s); see `applyModeVisibility()`
+  in `main.ts`.
 - **Past fires** (by year) still use the original **WFS vector** pipeline:
   `fetchHistoricalFires(year)` in `effis.ts` returns GeoJSON, which
   `main.ts` puts on a `geojson` source (`fires`) rendered as a fill +
@@ -56,81 +59,98 @@ pipelines feeding independent, always-present map layers (toggled via
   equivalent of "active fires" (hotspots) — hotspot detections are
   inherently a *current* concept.
 
-**EFFIS WFS vs WMS: WFS does not work, in practice.** EFFIS exposes this
-burnt-area data through both a WFS interface (vector features) and a WMS/WMTS
-interface (raster tiles). Across extensive testing, EFFIS's WFS endpoint —
-what this app originally used for *all* fire data — hung or errored on
-**every single request**, including EFFIS's own documented zero-parameter
-example, independent of query shape, filters, or field names; it is not a
-"we got the call wrong" problem. Its WMS endpoint, by contrast, responds
-successfully most of the time in 1-3 seconds — confirmed to be what EFFIS's
-*own* production viewer (`forest-fire.emergency.copernicus.eu/apps/effis.csv`)
-actually uses for the current-situation view, found by inspecting that app's
-own bundled JS. WMS still isn't perfectly reliable (EFFIS's backend overall
-seems to be under real strain, plausibly load from peak Mediterranean fire
-season, and goes through spells of failing *every* layer including this one
-— if current fires stop rendering, check whether EFFIS itself is down before
-assuming a code regression), but it's dramatically better than WFS, which is
-why current fires moved to it. Past fires stay on WFS because no
-historical/date-filtered access path has been found to work reliably:
-neither `modis.ba.<year>` (WMTS, the pattern EFFIS's own viewer uses for
-past years) nor a `TIME=`-filtered WMS `GetMap` returned anything but a hang
-in testing — historical/temporal queries specifically seem to be the broken
-code path on EFFIS's backend, regardless of protocol. If EFFIS's WFS
-reliability ever improves, or a working historical WMS/WMTS pattern is
-found, `fetchHistoricalFires` is the place to swap it in.
+**EFFIS WFS vs WMS vs WMTS: WFS doesn't work, and neither does WMS for
+current-fires tiles — WMTS is the one that actually does.** EFFIS exposes
+this data three ways, and the three-way choice is *not* interchangeable
+protocol trivia — it's the difference between the map rendering fires and
+rendering nothing. WFS (vector features) — what this app originally used
+for *all* fire data — hung or errored on **every single request** during
+development, including EFFIS's own documented zero-parameter example,
+independent of query shape, filters, or field names; it's not a "we got the
+call wrong" problem, so "Past fires" still uses it only for lack of a
+working alternative (see below). Current fires first moved to WMS
+(`GetMap`, raster tiles, same upstream host as WFS) on the strength of one
+confirmed-working layer — but WMS turned out to reliably **hang** on every
+`.week`-suffixed layer, which is every hotspot layer and (at the time) the
+only working burnt-areas layer, so "Active fires" never actually rendered
+anything in production despite being wired up.
 
-**Which WMS layer, specifically, matters a lot — and isn't fully settled.**
-`WMS_LAYERS` in `src/effis.ts` maps each layer "kind" to its EFFIS WMS
-`LAYERS` name (and `map` file, if it needs a non-default one):
+The fix (found 2026-07-25, diagnosing a "Current fires shows nothing"
+report) came from capturing a HAR of EFFIS's own production viewer
+(`forest-fire.emergency.copernicus.eu/apps/effis.csv`) while it was
+successfully rendering, and reading its actual network requests rather than
+its URL bar. It never calls WMS for current-fires tiles at all — every
+single tile request goes to a **WMTS** `GetTile` endpoint at a *different*
+upstream mount, `/effist/wmts` (note: "effist", not "effis" — easy to miss,
+and the reason an earlier attempt at a WMTS pattern for past years,
+`modis.ba.<year>`, never worked: it was likely sent to the wrong mount).
+Replaying that exact request shape — `Service=WMTS&Request=GetTile` with
+`TileMatrix`/`TileCol`/`TileRow` and an explicit `time=<from>/<to>` range,
+not WMS's `BBOX` — against every `.week` layer returned real image data
+reliably, live, on the first try. So the earlier "every `.week`-suffixed
+layer hangs on every request" conclusion was real but incomplete: it's
+specific to *WMS*. WMTS, at the right mount, doesn't have this problem.
+Current fires now use WMTS exclusively (`src/effis.ts`'s `tileTemplate()`,
+proxied via `api/wmts.ts` — see below); WMS is no longer used anywhere in
+this codebase. Past fires stay on WFS because no per-year historical access
+path has been *confirmed* working — but see the note in "Known unknowns"
+below, since this same HAR raises a real possibility that WMTS could
+replace WFS there too.
 
-- `burnt-areas` → `severity_time` ("FIRE SEVERITY, weekly updated"), plus
-  `map=/mnt/nfs/mapfiles/severity.map` to select a non-default MapServer
-  mapfile (without it, the layer doesn't exist on the default one). The
-  *first* attempt at burnt areas used `modis.ba` ("MODIS/SENTINEL2
-  (supervised)") — it responds, but it's a full land-cover
+**Which WMTS layer, specifically, matters a lot.** `WMTS_LAYERS` in
+`src/effis.ts` maps each layer "kind" to its EFFIS WMTS layer identifier —
+all four now confirmed live and working (verified both via the HAR capture
+and by directly re-requesting each one):
+
+- `burnt-areas` → `severity_time.week` ("FIRE SEVERITY, weekly updated").
+  The *first* attempt at burnt areas used `modis.ba` over WMS ("MODIS/
+  SENTINEL2 (supervised)") — it responded, but it's a full land-cover
   *classification* raster, not a fire-only one: most pixels are just
-  "vegetation" green rather than transparent, so it rendered as solid green
-  tiles almost everywhere instead of highlighting fires. `modis.ba.week` —
-  the layer EFFIS's *own* viewer actually uses for this — would likely be
-  the more correct choice, but every `.week`-suffixed layer hung on every
-  request tested (see below), so `severity_time` is used as the best
-  confirmed-working alternative. If burnt areas ever look like uniform
-  colour blocks again rather than fire-shaped patches, that's this same
-  class of bug: check which WMS layer is actually being requested, not just
-  whether the request succeeds.
+  "vegetation" green rather than transparent, so it rendered as solid
+  green tiles almost everywhere instead of highlighting fires. If burnt
+  areas ever look like uniform colour blocks again rather than fire-shaped
+  patches, that's this same class of bug: check which layer is actually
+  being requested, not just whether the request succeeds. (EFFIS's own
+  viewer also stacks `modis.ba.week` and `nrt.ba.week` for this same
+  overlay; only `severity_time.week` is wired up here so far — the other
+  two are confirmed working too, in case richer burnt-area coverage is
+  ever worth the added tile requests.)
 - `active-fires-modis` / `active-fires-viirs` / `active-fires-s3` →
-  `modis.hs.week` / `viirs.all.week` / `s3.hs.week`, matching EFFIS's own
-  default hotspot layer set exactly. **These could not be verified working**
-  — every variant tried (with and without the `.week` suffix, across
-  several sessions) hung or 500'd. They're wired up on the reasonable bet
-  that it's the same general backend flakiness rather than wrong layer
-  names (the names come directly from EFFIS's own app, not guessed), but
-  if "Active fires" never shows anything even when EFFIS is otherwise
-  responsive, question the layer names themselves next.
+  `modis.hs.week` / `viirs.hs.week` / `s3.hs.week`. Note `viirs.hs.week`,
+  *not* `viirs.all.week` — the app's own URL bar advertises `viirs.all.week`
+  in its `tiles=` param, but its actual `GetTile` network calls request
+  `viirs.hs.week`; the two disagree, and the real network calls are what's
+  confirmed working. All three hotspot layers were previously believed
+  possibly-broken-or-possibly-wrong-name; they're now confirmed working
+  correctly-named, just over the wrong protocol before.
 
-Every `.week`-suffixed layer (burnt areas *and* all three hotspot sources)
-hangs on every request — the same broken "anything date/time-scoped"
-backend path as WFS's `cql_filter`, WMS `TIME` params, and WMTS year-layers
-elsewhere in this file. The *bare* (non-suffixed) hotspot names
-(`modis.hs`, `viirs.all`, `s3.hs`) were also tried and hang identically, so
-this isn't only about the `.week` suffix — EFFIS's near-real-time hotspot
-backend specifically appears to be broken independent of the burnt-areas
-backend, which stays comparatively healthy.
+**Why the app never fetches EFFIS directly — and why there are *two*
+proxies, not one.** Nothing ever calls `maps.effis.emergency.copernicus.eu`
+straight from the browser; everything goes through a same-origin relative
+path first. There are two such paths, because EFFIS serves WFS and WMTS
+from two *different* upstream mounts and both need proxying separately:
+- `/api/effis` (WFS calls for "Past fires") → upstream `/effis`. In dev,
+  `vite.config.ts` proxies this to
+  `https://maps.effis.emergency.copernicus.eu/effis`. In production,
+  `api/effis.ts` is a Vercel Edge Function that forwards it server-side —
+  its path (`api/effis.ts`) maps directly to the `/api/effis` route Vercel
+  serves, no rewrite rule needed.
+- `/api/wmts` (WMTS `GetTile` calls for current fires) → upstream
+  `/effist/wmts` (note the different path *and* the "effist" vs "effis"
+  spelling — see the WFS/WMS/WMTS note above). Same dev/prod split:
+  `vite.config.ts`'s second proxy entry, and `api/wmts.ts` in production.
 
-**Why the app never fetches EFFIS directly.** Both the WFS calls (past
-fires) and the WMS tile calls (current fires) go through the relative path
-`/api/effis` — never straight to `maps.effis.emergency.copernicus.eu`. In
-dev, `vite.config.ts` proxies that to
-`https://maps.effis.emergency.copernicus.eu/effis`. In production, `api/effis.ts`
-is a Vercel Edge Function that forwards the request server-side — its path
-(`api/effis.ts`) maps directly to the `/api/effis` route Vercel serves, no
-rewrite rule needed. This exists because EFFIS's CORS support isn't
-guaranteed to stay open (it happens to be open today on both interfaces,
-confirmed by inspecting response headers, but going through a same-origin
-proxy sidesteps depending on that continuing to be true). Both proxy
-implementations must stay in sync if the upstream URL or query shape
-changes.
+Both exist because EFFIS's CORS support isn't guaranteed to stay open (it
+happens to be open today on both interfaces, confirmed by inspecting
+response headers, but going through a same-origin proxy sidesteps depending
+on that continuing to be true). All four proxy definitions (two files, two
+`vite.config.ts` entries) must stay in sync if either upstream URL or query
+shape changes — they're deliberately *not* merged into one generic
+"forward whatever path suffix arrives" proxy, since `/api/effis` and
+`/api/wmts` sharing a naming prefix as literal path prefixes would risk one
+swallowing the other in Vite's prefix-matching proxy config depending on
+declaration order; keeping them as fully separate, non-overlapping route
+names sidesteps that footgun entirely.
 
 **EFFIS's WFS response is a zipped shapefile, not GeoJSON**, and it must be
 requested as a raw buffer, not a URL string. `shpjs`'s `shp()` function only
@@ -193,7 +213,7 @@ unchanged, only *when* it runs moved earlier. If this fetch fails,
 `new Map()` (reintroducing the flash, but at least the map still loads).
 
 Past-fires polygons (added separately in `main.ts`) are red, by our own
-choice. The two current-fires WMS raster overlays are *not* controlled by
+choice. The two current-fires WMTS raster overlays are *not* controlled by
 us the same way — their colours (burn severity gradient, hotspot markers)
 are whatever EFFIS's server renders, so the map is no longer strictly
 monochrome-plus-red once "Active fires"/"Burnt areas" are showing real
@@ -263,11 +283,11 @@ update them on its own until the pre-scripts rerun.
 ## Key files
 
 - `src/map.ts` — MapLibre init, OpenFreeMap basemap reduced to white +
-  black-labels-only, globe projection, Europe bounds, GISCO country borders,
-  the burnt-areas/active-fires WMS raster layers + the `transformRequest`
-  that powers them.
-- `src/effis.ts` — EFFIS fetch/parse/filter logic, the `WMS_LAYERS` config,
-  and property accessors.
+  black-labels-only, globe projection, default bounds, GISCO country
+  borders, and the burnt-areas/active-fires WMTS raster layers
+  (`addWmtsRasterLayer`, `tileSize: 1024` to match EFFIS's tile matrix).
+- `src/effis.ts` — EFFIS fetch/parse/filter logic, the `WMTS_LAYERS`
+  config + `tileTemplate()`, and property accessors.
 - `src/borders.ts` — fetches + converts the GISCO country-borders topojson.
 - `src/main.ts` — wires the map, the current/past mode toggle, the
   active-fires/burnt-areas checkboxes, year `<select>`, and click-to-popup
@@ -282,31 +302,52 @@ update them on its own until the pre-scripts rerun.
   the toolbar's height, especially on narrow viewports; `#toolbar` uses
   `flex-wrap: wrap` so its growing control count still degrades gracefully
   on mobile instead of overflowing horizontally.
-- `api/effis.ts` (Vercel Edge Function) + `vite.config.ts` (`server.proxy`)
-  — the two proxy implementations that must stay behaviorally equivalent.
+- `api/effis.ts` + `api/wmts.ts` (Vercel Edge Functions) + `vite.config.ts`
+  (`server.proxy`, two entries) — the WFS and WMTS proxy implementations;
+  each dev/prod pair must stay behaviorally equivalent.
 - `scripts/copy-maplibre-worker.mjs` + `public/` — see the Web Worker
   gotcha above.
 
 ## Known unknowns
 
 EFFIS's backend is generally under real strain (plausibly load from peak
-Mediterranean fire season) — even the WMS path used for "Burnt areas",
-while dramatically more reliable than WFS, is not 100% solid, and "Active
-fires" has not been confirmed working at all (see above). Expect occasional
-gaps in tile coverage rather than a hard error, since a single failed
-raster tile just doesn't render (no error UI, matching how the basemap's
-own raster layers already behave). If current fires look sparse, that may
-just be an accurate reflection of the fire situation rather than a loading
-failure — there's no easy way from the client side to distinguish "no fires
-here" from "this tile failed to load" for a raster overlay.
+Mediterranean fire season) — even WMTS, now confirmed dramatically more
+reliable than WMS ever was for current fires, is not 100% solid (a handful
+of tiles 500'd during live testing on 2026-07-25 even while most of the
+same layer's tiles succeeded). Expect occasional gaps in tile coverage
+rather than a hard error, since a single failed raster tile just doesn't
+render (no error UI, matching how the basemap's own raster layers already
+behave). If current fires look sparse, that may just be an accurate
+reflection of the fire situation rather than a loading failure — there's
+no easy way from the client side to distinguish "no fires here" from "this
+tile failed to load" for a raster overlay.
+
+**WMTS may be a working historical/date-filtered path after all — unconfirmed,
+but worth chasing before touching WFS again.** The HAR capture that revealed
+the WMTS endpoint (see above) used `time=2026-06-07/2026-06-14` — a date
+range *weeks before* the HAR's own capture timestamp — and still got real
+image data back, not just "whatever today's data is regardless of the param
+you pass." If EFFIS's WMTS genuinely honors arbitrary past `time=` ranges
+for these `.week` layers, that could finally be the "working historical
+WMS/WMTS pattern" this file has been assuming doesn't exist — which would
+let "Past fires" drop WFS entirely. This has *not* been verified: it's
+equally possible the server ignores `time=` for these layers and always
+serves its latest cached tile regardless of what range is requested (the
+layers' WMTSCapabilities entries declare no `Dimension`/time values at all,
+so there's no capabilities-level confirmation either way). Before acting on
+this, confirm by requesting the *same* tile with two clearly-different
+`time=` ranges (e.g. one from an active fire season, one from mid-winter)
+and checking whether the returned images actually differ.
 
 WMS `GetFeatureInfo` (which would let users click a current-fire tile for
 details, mirroring the popup that already works for "Past fires") was
-tested and found unreliable — every `INFO_FORMAT` tried either hung or
-returned an "unsupported format" error, with no format found that actually
-returns data. It's not wired up for that reason; if EFFIS's service
-stabilizes, `resolveEffisTileRequest`'s WMS parameter pattern in
-`src/effis.ts` is the place to add a `GetFeatureInfo` variant.
+tested against the old WMS endpoint and found unreliable — every
+`INFO_FORMAT` tried either hung or returned an "unsupported format" error,
+with no format found that actually returns data. It's not wired up for
+that reason. WMTS's own `ResourceURL resourceType="FeatureInfo"` templates
+(visible in `/effist/wmts/1.0.0/WMTSCapabilities.xml`) haven't been tried at
+all — they're a more promising untested lead than the old WMS path, now
+that WMTS itself has proven reliable for tile data.
 
 EFFIS's WFS field names/casing (used for "Past fires") were taken from
 EFFIS's own published documentation, not guessed, but have never been
@@ -316,24 +357,27 @@ zero-parameter example. If you're debugging a "Past fires" data issue,
 check the network tab for the actual `feature.properties` shape before
 assuming the code is wrong.
 
-**Requests through the production proxy have been observed hanging even
+**Requests through either production proxy have been observed hanging even
 when EFFIS itself is fine.** Diagnosing a spell of all-layers-503/504 in
-production (2026-07-25): the exact same WMS `GetMap` request that hung
-through `api/effis.ts` until Vercel killed the function (~25s,
-`FUNCTION_INVOCATION_TIMEOUT`) succeeded in 2-6s when sent directly to
-`maps.effis.emergency.copernicus.eu`, repeatably, for both a normally-working
-layer (`severity_time`) and a bare `GetCapabilities` call. So this failure
+production (2026-07-25, before the WMS→WMTS migration above): the exact
+same request that hung through `api/effis.ts` until Vercel killed the
+function (~25s, `FUNCTION_INVOCATION_TIMEOUT`) succeeded in 2-6s when sent
+directly to `maps.effis.emergency.copernicus.eu`, repeatably, for both a
+normally-working layer and a bare `GetCapabilities` call. So this failure
 mode is distinct from EFFIS's general backend strain described above — it's
-specific to requests routed through the Vercel Edge Function's network path,
-not EFFIS being slow or down for everyone. The likely cause is EFFIS's
-AWS-fronted WAF/rate-limiter reacting to Vercel's shared edge egress IPs
-(plausibly tripped by the burst of parallel tile requests a single pan/zoom
-generates, all from the same source IP), rather than a permanent block,
-since the WAF is already known to react defensively to other traffic shapes
-(see the `cql_filter` note above). `api/effis.ts` now applies its own
-`AbortSignal.timeout` (15s) to this fetch so a hang fails fast with a clean
-504 instead of silently eating Vercel's full function timeout — this makes
+specific to requests routed through the Vercel Edge Function's network
+path, not EFFIS being slow or down for everyone. The likely cause is
+EFFIS's AWS-fronted WAF/rate-limiter reacting to Vercel's shared edge
+egress IPs (plausibly tripped by the burst of parallel tile requests a
+single pan/zoom generates, all from the same source IP), rather than a
+permanent block, since the WAF is already known to react defensively to
+other traffic shapes (see the `cql_filter` note above). There's no reason
+to expect `/api/wmts` is immune from this same class of problem just
+because it hits a different upstream mount — both `api/effis.ts` and
+`api/wmts.ts` apply their own `AbortSignal.timeout` (15s) to their
+upstream fetch for exactly this reason, so a hang fails fast with a clean
+504 instead of silently eating Vercel's full function timeout. That makes
 failures faster and cleaner, not less frequent. If current fires are down
-in production but a direct `curl` to EFFIS's WMS endpoint succeeds, this is
-almost certainly what's happening; there's no client-side fix for it, since
-it's about which network the request originates from.
+in production but a direct `curl` to EFFIS's WMTS endpoint succeeds, this
+is almost certainly what's happening; there's no client-side fix for it,
+since it's about which network the request originates from.

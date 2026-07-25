@@ -18,6 +18,13 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/effis/, "/effis"),
       },
+      // Current-fires tiles use a separate upstream mount (/effist/wmts,
+      // not /effis) — see api/wmts.ts and src/effis.ts's tileTemplate().
+      "/api/wmts": {
+        target: "https://maps.effis.emergency.copernicus.eu",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/wmts/, "/effist/wmts"),
+      },
     },
   },
   optimizeDeps: {
