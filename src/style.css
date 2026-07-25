@@ -315,6 +315,9 @@ body {
   border-radius: 14px;
   border: 2px solid transparent;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
 }
 
 .basemap-option[aria-checked="true"] .basemap-thumb {
@@ -327,47 +330,32 @@ body {
   font-weight: 600;
 }
 
-/* Small CSS-only "map style" swatches — cheap and deterministic, no thumbnail
-   assets to fetch/keep in sync with the real basemap styles. */
 .basemap-thumb-plain {
-  background: #fdfdfd;
-  background-image: linear-gradient(#ddd 1px, transparent 1px), linear-gradient(90deg, #ddd 1px, transparent 1px);
-  background-size: 16px 16px;
+  background-image: url('/thumbnails/plain.png');
 }
 
 .basemap-thumb-positron {
-  background: #e9e6df;
-  background-image: linear-gradient(#d8d3c8 1px, transparent 1px), linear-gradient(90deg, #d8d3c8 1px, transparent 1px);
-  background-size: 16px 16px;
+  background-image: url('/thumbnails/positron.png');
 }
 
 .basemap-thumb-bright {
-  background: #f4f3f0;
-  background-image: linear-gradient(135deg, #a5d6a7 30%, #90caf9 70%);
+  background-image: url('/thumbnails/bright.png');
 }
 
 .basemap-thumb-liberty {
-  background: #f1efec;
-  background-image: linear-gradient(135deg, #81c784 20%, #e0e0e0 80%);
+  background-image: url('/thumbnails/liberty.png');
 }
 
 .basemap-thumb-dark {
-  background: #242424;
-  background-image: linear-gradient(135deg, #121212 30%, #333 70%);
+  background-image: url('/thumbnails/dark.png');
 }
 
 .basemap-thumb-fiord {
-  background: #3b4252;
-  background-image: linear-gradient(135deg, #2e3440 40%, #4c566a 80%);
+  background-image: url('/thumbnails/fiord.png');
 }
 
 .basemap-thumb-3d {
-  background: #e2e2e2;
-  background-image: linear-gradient(45deg, #bbb 25%, transparent 25%),
-                    linear-gradient(-45deg, #bbb 25%, transparent 25%),
-                    linear-gradient(45deg, transparent 75%, #bbb 75%),
-                    linear-gradient(-45deg, transparent 75%, #bbb 75%);
-  background-size: 8px 8px;
+  background-image: url('/thumbnails/3d.png');
 }
 
 .segmented {
