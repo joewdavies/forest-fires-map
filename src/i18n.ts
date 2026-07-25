@@ -1,4 +1,4 @@
-export type Language = "en" | "es";
+export type Language = "en" | "es" | "de" | "fr";
 
 const translations: Record<Language, Record<string, string>> = {
   en: {
@@ -82,6 +82,88 @@ const translations: Record<Language, Record<string, string>> = {
     search_placeholder: "Buscar un lugar...",
     aria_search: "Buscar",
     aria_change_language: "Cambiar idioma"
+  },
+  de: {
+    app_title: "Waldbrandkarte",
+    header_title: "Waldbrandkarte",
+    aria_map_layers: "Kartenebenen",
+    layers_title: "Ebenen",
+    aria_close: "Schließen",
+    basemap: "Grundkarte",
+    aria_bg_map: "Hintergrundkarte",
+    basemap_plain: "Einfach",
+    basemap_positron: "Positron",
+    basemap_osm: "OSM",
+    basemap_satellite: "Satellit",
+    map_details: "Kartendetails",
+    aria_fire_time_range: "Zeitraum der Brände",
+    current_fires: "Aktuelle Brände",
+    past_fires: "Historische Brände",
+    aria_fire_layers: "Feuerebenen",
+    active_fires: "Aktive Brände",
+    burnt_areas: "Verbrannte Flächen",
+    place_names: "Ortsnamen",
+    loading_style: "Kartenstil wird geladen…",
+    error_basemap: "Grundkarte konnte nicht geladen werden.",
+    live_fires_status: "Zeigt aktuelle aktive Brände und verbrannte Flächen von EFFIS.",
+    loading_year_fires: "Brände für {year} werden geladen…",
+    no_burnt_areas: "Keine verbrannten Flächen für {year} aufgezeichnet.",
+    fires_shown_singular: "{count} Brand angezeigt.",
+    fires_shown_plural: "{count} Brände angezeigt.",
+    popup_date: "Datum",
+    popup_burnt_area: "Verbrannte Fläche",
+    popup_country: "Land",
+    unknown: "Unbekannt",
+    error_timeout: "EFFIS hat nicht rechtzeitig geantwortet. Der Dienst ist möglicherweise überlastet – versuchen Sie es bald noch einmal.",
+    error_reachability: "EFFIS konnte nicht erreicht werden ({error}). Der Dienst ist möglicherweise vorübergehend nicht verfügbar – versuchen Sie es bald noch einmal.",
+    error_http: "EFFIS hat einen Fehler zurückgegeben (HTTP {status}). Der Dienst ist möglicherweise vorübergehend nicht verfügbar – versuchen Sie es bald noch einmal.{detail}",
+    error_parse: "Antwort von EFFIS empfangen, konnte aber nicht als Shapefile-Daten analysiert werden ({error}).",
+    error_load_failed: "Feuerdaten konnten nicht geladen werden.",
+    aria_compass: "Ausrichtung nach Norden zurücksetzen",
+    search_placeholder: "Nach einem Ort suchen...",
+    aria_search: "Suche",
+    aria_change_language: "Sprache ändern"
+  },
+  fr: {
+    app_title: "Carte des incendies de forêt",
+    header_title: "Carte des incendies de forêt",
+    aria_map_layers: "Couches de la carte",
+    layers_title: "Couches",
+    aria_close: "Fermer",
+    basemap: "Carte de base",
+    aria_bg_map: "Carte de fond",
+    basemap_plain: "Simple",
+    basemap_positron: "Positron",
+    basemap_osm: "OSM",
+    basemap_satellite: "Satellite",
+    map_details: "Détails de la carte",
+    aria_fire_time_range: "Plage horaire des incendies",
+    current_fires: "Incendies actuels",
+    past_fires: "Incendies passés",
+    aria_fire_layers: "Couches d'incendies",
+    active_fires: "Incendies actifs",
+    burnt_areas: "Zones brûlées",
+    place_names: "Noms de lieux",
+    loading_style: "Chargement du style de carte…",
+    error_basemap: "Échec du chargement de cette carte de base.",
+    live_fires_status: "Affichage des incendies actifs et des zones brûlées en temps réel d'EFFIS.",
+    loading_year_fires: "Chargement des incendies de {year}…",
+    no_burnt_areas: "Aucune zone brûlée enregistrée pour {year}.",
+    fires_shown_singular: "{count} incendie affiché.",
+    fires_shown_plural: "{count} incendies affichés.",
+    popup_date: "Date",
+    popup_burnt_area: "Zone brûlée",
+    popup_country: "Pays",
+    unknown: "Inconnu",
+    error_timeout: "EFFIS n'a pas répondu à temps. Le service est peut-être surchargé – réessayez bientôt.",
+    error_reachability: "Impossible de joindre EFFIS ({error}). Le service est peut-être temporairement indisponible – réessayez bientôt.",
+    error_http: "EFFIS a renvoyé une erreur (HTTP {status}). Le service est peut-être temporairement indisponible – réessayez bientôt.{detail}",
+    error_parse: "Réponse d'EFFIS reçue mais impossible de l'analyser comme des données shapefile ({error}).",
+    error_load_failed: "Échec du chargement des données sur les incendies.",
+    aria_compass: "Réinitialiser l'orientation vers le Nord",
+    search_placeholder: "Rechercher un lieu...",
+    aria_search: "Recherche",
+    aria_change_language: "Changer de langue"
   }
 };
 
@@ -89,8 +171,9 @@ let currentLanguage: Language = "en";
 
 // Detect browser/device language
 const userLang = navigator.language || (navigator as any).userLanguage || "";
-if (userLang.toLowerCase().startsWith("es")) {
-  currentLanguage = "es";
+const code = userLang.toLowerCase().slice(0, 2);
+if (["es", "de", "fr"].includes(code)) {
+  currentLanguage = code as Language;
 }
 
 export function getLanguage(): Language {
