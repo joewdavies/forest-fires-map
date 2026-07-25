@@ -249,10 +249,10 @@ export function setBasemap(
 // distinguishing place *classes* structurally isn't possible without
 // relying on each layer's filter expression; if Liberty renames these ids
 // upstream, the affected layers just fall back to being shown.
-const HIDDEN_PLACE_LABEL_IDS = new Set([
+const HIDDEN_PLACE_LABEL_IDS = new Set<string>([
   //"label_village",
   //"label_town",
-  "label_other",
+  //"label_other",
 ]);
 
 /**
@@ -270,8 +270,8 @@ function stripToPlaceLabelsOnly(style: Style): void {
       layer.paint = { ...layer.paint, "background-color": "#ffffff" };
     } else if (
       layer.type === "symbol" &&
-      layer["source-layer"] === "place" &&
-      !HIDDEN_PLACE_LABEL_IDS.has(layer.id)
+      layer["source-layer"] === "place" //&&
+      //!HIDDEN_PLACE_LABEL_IDS.has(layer.id)
     ) {
       // Surviving place labels (country/state/city) — keep their existing
       // layout/hierarchy/halo as-is, just force the text black.
