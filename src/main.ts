@@ -374,10 +374,20 @@ function selectPlace(place: GeocodeResult) {
     searchInput.value = place.display_name;
     searchResults.hidden = true;
     searchInput.blur();
+    searchContainer.classList.remove("expanded");
   }
 }
 
-searchBtn.addEventListener("click", performInstantSearch);
+searchBtn.addEventListener("click", (e) => {
+  const isMobile = window.innerWidth <= 768;
+  if (isMobile && !searchContainer.classList.contains("expanded")) {
+    e.stopPropagation();
+    searchContainer.classList.add("expanded");
+    searchInput.focus();
+  } else {
+    performInstantSearch();
+  }
+});
 searchInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter") {
     performInstantSearch();
@@ -415,6 +425,7 @@ async function performInstantSearch() {
 document.addEventListener("click", (e) => {
   if (!searchContainer.contains(e.target as Node)) {
     searchResults.hidden = true;
+    searchContainer.classList.remove("expanded");
   }
 });
 
