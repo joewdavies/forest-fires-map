@@ -156,59 +156,13 @@ async function fetchLibertyStyle(): Promise<Style> {
   return structuredClone(cachedLibertyStyle);
 }
 
-export type BasemapKind = "plain" | "positron" | "osm" | "satellite";
+export type BasemapKind = "plain" | "positron" | "bright" | "liberty" | "dark" | "fiord" | "3d";
 
-const CARTO_POSITRON_STYLE = "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json";
-
-// OSM's tile usage policy (operations.osmfoundation.org/policies/tiles)
-// discourages heavy production traffic against tile.openstreetmap.org
-// directly — fine at this app's scale, but if usage ever grows, switch to a
-// dedicated tile provider instead of leaning harder on the community server.
-const OSM_TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
-const OSM_ATTRIBUTION =
-  '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors';
-
-// Esri's World Imagery service — free, no API key, the standard "satellite"
-// raster basemap choice (same one leaflet-providers lists as Esri.WorldImagery).
-// Note the tile URL is z/y/x, not z/x/y — that's an ArcGIS REST convention,
-// not a typo.
-const SATELLITE_TILE_URL =
-  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
-const SATELLITE_ATTRIBUTION =
-  '&copy; <a href="https://www.esri.com/" target="_blank" rel="noopener">Esri</a>, Maxar, Earthstar Geographics, and the GIS User Community';
-
-/** Builds a minimal single-layer style wrapping one XYZ raster tile source —
- * used for "osm" and "satellite", which (unlike "plain"/"positron") aren't
- * vector styles we need to reach into. */
-function rasterStyle(sourceId: string, tileUrl: string, attribution: string): Style {
-  return {
-    version: 8,
-    sources: {
-      [sourceId]: { type: "raster", tiles: [tileUrl], tileSize: 256, attribution },
-    },
-    layers: [{ id: sourceId, type: "raster", source: sourceId }],
-  };
-}
-
-/** Resolves a basemap choice to whatever setStyle() needs to load it.
- * "plain" is built the same way as the initial load (fetched + stripped to
- * white/labels-only). "positron" is passed straight through as a URL rather
- * than pre-fetched/re-themed like "plain" — it's already a muted basemap as
- * shipped, and letting MapLibre fetch it itself means its sprite/glyph URLs
- * (relative to the style's own URL) resolve correctly without us having to
- * replicate that resolution logic. "osm"/"satellite" are raster, built
- * inline via rasterStyle(). */
 async function styleForBasemap(kind: BasemapKind): Promise<Style | string> {
-  switch (kind) {
-    case "plain":
-      return loadStrippedStyle();
-    case "positron":
-      return CARTO_POSITRON_STYLE;
-    case "osm":
-      return rasterStyle("osm-raster", OSM_TILE_URL, OSM_ATTRIBUTION);
-    case "satellite":
-      return rasterStyle("satellite-raster", SATELLITE_TILE_URL, SATELLITE_ATTRIBUTION);
+  if (kind === "plain") {
+    return loadStrippedStyle();
   }
+  return `https://tiles.openfreemap.org/styles/${kind}`;
 }
 
 /**

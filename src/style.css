@@ -341,22 +341,33 @@ body {
   background-size: 16px 16px;
 }
 
-.basemap-thumb-osm {
-  background: linear-gradient(
-    135deg,
-    #a8d8b9 0%,
-    #a8d8b9 40%,
-    #f1e5b3 40%,
-    #f1e5b3 60%,
-    #a9cde3 60%,
-    #a9cde3 100%
-  );
+.basemap-thumb-bright {
+  background: #f4f3f0;
+  background-image: linear-gradient(135deg, #a5d6a7 30%, #90caf9 70%);
 }
 
-.basemap-thumb-satellite {
-  background:
-    radial-gradient(circle at 30% 30%, #6b8f4e, transparent 55%),
-    radial-gradient(circle at 70% 60%, #4a6b3a, transparent 55%), #3d5a34;
+.basemap-thumb-liberty {
+  background: #f1efec;
+  background-image: linear-gradient(135deg, #81c784 20%, #e0e0e0 80%);
+}
+
+.basemap-thumb-dark {
+  background: #242424;
+  background-image: linear-gradient(135deg, #121212 30%, #333 70%);
+}
+
+.basemap-thumb-fiord {
+  background: #3b4252;
+  background-image: linear-gradient(135deg, #2e3440 40%, #4c566a 80%);
+}
+
+.basemap-thumb-3d {
+  background: #e2e2e2;
+  background-image: linear-gradient(45deg, #bbb 25%, transparent 25%),
+                    linear-gradient(-45deg, #bbb 25%, transparent 25%),
+                    linear-gradient(45deg, transparent 75%, #bbb 75%),
+                    linear-gradient(-45deg, transparent 75%, #bbb 75%);
+  background-size: 8px 8px;
 }
 
 .segmented {
