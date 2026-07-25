@@ -4,10 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A MapLibre GL viewer showing forest fires in Europe: currently active fire
-perimeters by default, with a toggle to browse historical burnt areas by
-year. Vanilla TypeScript + Vite, no UI framework — the whole app is a map
-plus a couple of controls.
+A MapLibre GL viewer showing forest fires in Europe: current active-fire
+hotspots and burnt-area perimeters by default (each independently
+toggleable), with a mode switch to browse historical burnt areas by year
+instead. Vanilla TypeScript + Vite, no UI framework — the whole app is a
+map plus a handful of controls.
 
 ## Commands
 
@@ -24,23 +25,36 @@ There is no test suite or linter configured. Type-check with `npx tsc -b`
 ## Architecture
 
 **Data flow**: there is no backend/database — everything is client-fetched
-on demand, but "Current fires" and "Past fires" are two structurally
-different pipelines feeding two independent, always-present map layers
-(toggled via `visibility`, not swapped in place — see
-`applyModeVisibility()` in `main.ts`):
+on demand, but "Current fires" and "Past fires" are structurally different
+pipelines feeding independent, always-present map layers (toggled via
+`visibility`, not swapped in place — see `applyModeVisibility()` in
+`main.ts`):
 
-- **Current fires** render as a **WMS raster tile overlay** (`modis.ba`
-  layer, added in `map.ts`'s `addCurrentFiresLayer()`). No fetch/parsing
-  code of ours is involved — MapLibre requests tiles on demand like any
-  raster source. `effis.ts`'s `resolveEffisTileRequest()` + `map.ts`'s
-  `transformRequest` adapt MapLibre's `{z}/{x}/{y}` tile grid into WMS
-  `GetMap` calls (MapLibre has no native WMS support, so this is the
-  standard adapter pattern — see the "EFFIS WFS vs WMS" note below for why
-  WMS specifically).
+- **Current fires** split into two separately-toggleable **WMS raster tile
+  overlays**, matching EFFIS's own "Current Situation Viewer" (its default
+  layer set is visible directly in its URL —
+  `?tiles=hsl,modis.hs.week,viirs.all.week,s3.hs.week,modis.ba.week`):
+  - **"Burnt areas"** (`BURNT_AREAS_LAYER_ID`, one raster source) — fire
+    perimeter polygons.
+  - **"Active fires"** (`ACTIVE_FIRES_LAYER_IDS`, three raster sources
+    stacked) — hotspot detections from three independent satellite
+    sources, rendered as points/triangles by the WMS server itself.
+
+  Both are added in `map.ts`'s `addBurntAreasLayer()` /
+  `addActiveFiresLayers()`. No fetch/parsing code of ours is involved for
+  either — MapLibre requests tiles on demand like any raster source.
+  `effis.ts`'s `resolveEffisTileRequest()` + `map.ts`'s `transformRequest`
+  adapt MapLibre's `{z}/{x}/{y}` tile grid into WMS `GetMap` calls (MapLibre
+  has no native WMS support, so this is the standard adapter pattern — see
+  the "EFFIS WFS vs WMS" note below for why WMS specifically). The two
+  toggle checkboxes in the toolbar just flip `visibility` on the
+  corresponding layer(s); see `applyModeVisibility()` in `main.ts`.
 - **Past fires** (by year) still use the original **WFS vector** pipeline:
   `fetchHistoricalFires(year)` in `effis.ts` returns GeoJSON, which
   `main.ts` puts on a `geojson` source (`fires`) rendered as a fill +
-  outline layer, clickable for a details popup.
+  outline layer, clickable for a details popup. There's no historical
+  equivalent of "active fires" (hotspots) — hotspot detections are
+  inherently a *current* concept.
 
 **EFFIS WFS vs WMS: WFS does not work, in practice.** EFFIS exposes this
 burnt-area data through both a WFS interface (vector features) and a WMS/WMTS
@@ -66,21 +80,43 @@ code path on EFFIS's backend, regardless of protocol. If EFFIS's WFS
 reliability ever improves, or a working historical WMS/WMTS pattern is
 found, `fetchHistoricalFires` is the place to swap it in.
 
-**Which WMS layer, specifically, matters a lot.** The first working version
-of this used the `modis.ba` layer ("MODIS/SENTINEL2 (supervised)" in
-EFFIS's own UI) — it does respond, but it's a full land-cover
-*classification* raster, not a fire-only one: most pixels are just
-"vegetation" green rather than transparent, so it rendered as solid green
-tiles almost everywhere instead of highlighting fires. `WMS_CURRENT_LAYER`
-in `src/effis.ts` now uses `severity_time` ("FIRE SEVERITY, weekly updated")
-instead — EFFIS's own dedicated burn-severity layer, listed in the same
-"BURNT AREAS" section of their app as `modis.ba`, found the same way (their
-bundled JS). It needs an extra `map=/mnt/nfs/mapfiles/severity.map` query
-param (`WMS_CURRENT_MAP_FILE`) to select a non-default MapServer mapfile —
-without it the layer doesn't exist on the default one. If current fires
-ever look like uniform colour blocks again rather than fire-shaped patches,
-that's this same class of bug: check which WMS layer is actually being
-requested, not just whether the request succeeds.
+**Which WMS layer, specifically, matters a lot — and isn't fully settled.**
+`WMS_LAYERS` in `src/effis.ts` maps each layer "kind" to its EFFIS WMS
+`LAYERS` name (and `map` file, if it needs a non-default one):
+
+- `burnt-areas` → `severity_time` ("FIRE SEVERITY, weekly updated"), plus
+  `map=/mnt/nfs/mapfiles/severity.map` to select a non-default MapServer
+  mapfile (without it, the layer doesn't exist on the default one). The
+  *first* attempt at burnt areas used `modis.ba` ("MODIS/SENTINEL2
+  (supervised)") — it responds, but it's a full land-cover
+  *classification* raster, not a fire-only one: most pixels are just
+  "vegetation" green rather than transparent, so it rendered as solid green
+  tiles almost everywhere instead of highlighting fires. `modis.ba.week` —
+  the layer EFFIS's *own* viewer actually uses for this — would likely be
+  the more correct choice, but every `.week`-suffixed layer hung on every
+  request tested (see below), so `severity_time` is used as the best
+  confirmed-working alternative. If burnt areas ever look like uniform
+  colour blocks again rather than fire-shaped patches, that's this same
+  class of bug: check which WMS layer is actually being requested, not just
+  whether the request succeeds.
+- `active-fires-modis` / `active-fires-viirs` / `active-fires-s3` →
+  `modis.hs.week` / `viirs.all.week` / `s3.hs.week`, matching EFFIS's own
+  default hotspot layer set exactly. **These could not be verified working**
+  — every variant tried (with and without the `.week` suffix, across
+  several sessions) hung or 500'd. They're wired up on the reasonable bet
+  that it's the same general backend flakiness rather than wrong layer
+  names (the names come directly from EFFIS's own app, not guessed), but
+  if "Active fires" never shows anything even when EFFIS is otherwise
+  responsive, question the layer names themselves next.
+
+Every `.week`-suffixed layer (burnt areas *and* all three hotspot sources)
+hangs on every request — the same broken "anything date/time-scoped"
+backend path as WFS's `cql_filter`, WMS `TIME` params, and WMTS year-layers
+elsewhere in this file. The *bare* (non-suffixed) hotspot names
+(`modis.hs`, `viirs.all`, `s3.hs`) were also tried and hang identically, so
+this isn't only about the `.week` suffix — EFFIS's near-real-time hotspot
+backend specifically appears to be broken independent of the burnt-areas
+backend, which stays comparatively healthy.
 
 **Why the app never fetches EFFIS directly.** Both the WFS calls (past
 fires) and the WMS tile calls (current fires) go through the relative path
@@ -142,11 +178,17 @@ place-name labels — everything else (roads, water, buildings, POI icons, the
 shaded-relief raster) gets `visibility: 'none'`. It walks `map.getStyle().layers`
 structurally (by `type` / `source-layer === 'place'`) rather than by hardcoded
 layer id, so it keeps working if Liberty's ~110-layer list changes upstream.
-Fire polygons (added separately in `main.ts`) are the only other colour, in
-red. If you need to reintroduce any basemap colour (e.g. water), add a case
-to that function rather than switching to a different base style — Liberty
-was chosen specifically so place-label layout/hierarchy could be kept as-is
-while everything else is stripped.
+Past-fires polygons (added separately in `main.ts`) are red, by our own
+choice. The two current-fires WMS raster overlays are *not* controlled by
+us the same way — their colours (burn severity gradient, hotspot markers)
+are whatever EFFIS's server renders, so the map is no longer strictly
+monochrome-plus-red once "Active fires"/"Burnt areas" are showing real
+data; that's an accepted tradeoff of using EFFIS's own rendered tiles
+rather than vector data we could restyle ourselves. If you need to
+reintroduce any basemap colour (e.g. water), add a case to
+`stripToPlaceLabelsOnly` rather than switching to a different base style —
+Liberty was chosen specifically so place-label layout/hierarchy could be
+kept as-is while everything else is stripped.
 
 **Globe projection requires the style to be loaded.** `map.setProjection({ type: "globe" })`
 throws ("Style is not done loading.") if called before the map's `load`
@@ -205,11 +247,24 @@ update them on its own until the pre-scripts rerun.
 
 - `src/map.ts` — MapLibre init, OpenFreeMap basemap reduced to white +
   black-labels-only, globe projection, Europe bounds, GISCO country borders,
-  current-fires WMS raster layer + the `transformRequest` that powers it.
-- `src/effis.ts` — EFFIS fetch/parse/filter logic and property accessors.
+  the burnt-areas/active-fires WMS raster layers + the `transformRequest`
+  that powers them.
+- `src/effis.ts` — EFFIS fetch/parse/filter logic, the `WMS_LAYERS` config,
+  and property accessors.
 - `src/borders.ts` — fetches + converts the GISCO country-borders topojson.
-- `src/main.ts` — wires the map, the current/past toggle, year `<select>`,
-  and click-to-popup behavior together.
+- `src/main.ts` — wires the map, the current/past mode toggle, the
+  active-fires/burnt-areas checkboxes, year `<select>`, and click-to-popup
+  behavior together.
+- `index.html` / `src/style.css` — toolbar markup/styling. No custom
+  attribution footer — EFFIS and GISCO attribution are set via each
+  source's `attribution` property (see `map.ts`) and surface through
+  MapLibre's own `AttributionControl`, which is added by default and
+  already carries the basemap's OpenFreeMap/OpenStreetMap credit. `#status`
+  is deliberately single-line (`white-space: nowrap` + `text-overflow:
+  ellipsis`) so a long fetch-result/error message can't wrap and inflate
+  the toolbar's height, especially on narrow viewports; `#toolbar` uses
+  `flex-wrap: wrap` so its growing control count still degrades gracefully
+  on mobile instead of overflowing horizontally.
 - `api/effis.ts` (Vercel Edge Function) + `vite.config.ts` (`server.proxy`)
   — the two proxy implementations that must stay behaviorally equivalent.
 - `scripts/copy-maplibre-worker.mjs` + `public/` — see the Web Worker
@@ -218,15 +273,15 @@ update them on its own until the pre-scripts rerun.
 ## Known unknowns
 
 EFFIS's backend is generally under real strain (plausibly load from peak
-Mediterranean fire season) — even the WMS path used for current fires,
-while dramatically more reliable than WFS, is not 100% solid; expect
-occasional gaps in tile coverage rather than a hard error, since a single
-failed raster tile just doesn't render (no error UI, matching how the
-basemap's own raster layers already behave). If "Current fires" looks
-sparse, that may just be an accurate reflection of the fire situation
-rather than a loading failure — there's no easy way from the client side to
-distinguish "no fires here" from "this tile failed to load" for a raster
-overlay.
+Mediterranean fire season) — even the WMS path used for "Burnt areas",
+while dramatically more reliable than WFS, is not 100% solid, and "Active
+fires" has not been confirmed working at all (see above). Expect occasional
+gaps in tile coverage rather than a hard error, since a single failed
+raster tile just doesn't render (no error UI, matching how the basemap's
+own raster layers already behave). If current fires look sparse, that may
+just be an accurate reflection of the fire situation rather than a loading
+failure — there's no easy way from the client side to distinguish "no fires
+here" from "this tile failed to load" for a raster overlay.
 
 WMS `GetFeatureInfo` (which would let users click a current-fire tile for
 details, mirroring the popup that already works for "Past fires") was

@@ -8,7 +8,7 @@ import {
 } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { fetchCountryBorders } from "./borders";
-import { currentFiresTileTemplate, resolveEffisTileRequest } from "./effis";
+import { resolveEffisTileRequest, tileTemplate, type WmsLayerKind } from "./effis";
 
 // maplibre-gl v6 builds its tile-parsing Web Worker URL dynamically at
 // runtime, which Vite can't statically analyze to bundle as an asset (the
@@ -21,7 +21,11 @@ setWorkerUrl("/maplibre-gl-worker.mjs");
 const OPENFREEMAP_STYLE = "https://tiles.openfreemap.org/styles/liberty";
 const BORDERS_SOURCE_ID = "country-borders";
 const BORDERS_LAYER_ID = "country-borders-line";
-export const CURRENT_FIRES_LAYER_ID = "current-fires-raster";
+const EFFIS_ATTRIBUTION =
+  '<a href="https://forest-fire.emergency.copernicus.eu/" target="_blank" rel="noopener">EFFIS / Copernicus Emergency Management Service</a>';
+
+export const BURNT_AREAS_LAYER_ID = "burnt-areas-raster";
+export const ACTIVE_FIRES_LAYER_IDS = ["active-fires-modis", "active-fires-viirs", "active-fires-s3"] as const;
 
 // Roughly covers continental Europe, the Nordics, and the western Mediterranean.
 const EUROPE_BOUNDS: LngLatBoundsLike = [
@@ -35,10 +39,10 @@ export function createMap(container: HTMLElement): Map {
     style: OPENFREEMAP_STYLE,
     bounds: EUROPE_BOUNDS,
     fitBoundsOptions: { padding: 20 },
-    // Rewrites the placeholder tile URLs from currentFiresTileTemplate()
-    // (see effis.ts) into real EFFIS WMS GetMap requests. MapLibre has no
-    // native WMS/BBOX tile support, so this is the standard way to adapt a
-    // WMS endpoint into a raster tile source.
+    // Rewrites the placeholder tile URLs from tileTemplate() (see effis.ts)
+    // into real EFFIS WMS GetMap requests. MapLibre has no native WMS/BBOX
+    // tile support, so this is the standard way to adapt a WMS endpoint
+    // into a raster tile source.
     transformRequest: (url) => {
       const resolved = resolveEffisTileRequest(url);
       return resolved ? { url: resolved } : { url };
@@ -49,7 +53,8 @@ export function createMap(container: HTMLElement): Map {
     map.setProjection({ type: "globe" });
     stripToPlaceLabelsOnly(map);
     addCountryBorders(map);
-    addCurrentFiresLayer(map);
+    addBurntAreasLayer(map);
+    addActiveFiresLayers(map);
   });
 
   map.addControl(new NavigationControl({ showCompass: false }), "top-right");
@@ -89,6 +94,7 @@ function addCountryBorders(map: Map): void {
   map.addSource(BORDERS_SOURCE_ID, {
     type: "geojson",
     data: { type: "FeatureCollection", features: [] },
+    attribution: '<a href="https://gisco-services.ec.europa.eu/" target="_blank" rel="noopener">GISCO</a>',
   });
   map.addLayer(
     {
@@ -105,24 +111,32 @@ function addCountryBorders(map: Map): void {
     .catch((err) => console.warn("Failed to load country borders:", err));
 }
 
-/** Adds the current-fires WMS raster overlay, visible by default (matching
- * "Current fires" being the default mode — see main.ts), below the place
- * labels but above the country borders. main.ts toggles its visibility
- * when switching to/from "Past fires". */
-function addCurrentFiresLayer(map: Map): void {
-  const firstSymbolLayer = map.getStyle().layers.find((layer) => layer.type === "symbol");
-
-  map.addSource(CURRENT_FIRES_LAYER_ID, {
+function addWmsRasterLayer(map: Map, id: string, kind: WmsLayerKind, beforeId: string | undefined): void {
+  map.addSource(id, {
     type: "raster",
-    tiles: [currentFiresTileTemplate()],
+    tiles: [tileTemplate(kind)],
     tileSize: 256,
+    attribution: EFFIS_ATTRIBUTION,
   });
-  map.addLayer(
-    {
-      id: CURRENT_FIRES_LAYER_ID,
-      type: "raster",
-      source: CURRENT_FIRES_LAYER_ID,
-    },
-    firstSymbolLayer?.id,
-  );
+  map.addLayer({ id, type: "raster", source: id }, beforeId);
+}
+
+/** Adds the burnt-area WMS raster overlay (fire perimeter polygons),
+ * visible by default, below the place labels but above the country
+ * borders. main.ts toggles its visibility via the "Burnt areas" control. */
+function addBurntAreasLayer(map: Map): void {
+  const firstSymbolLayer = map.getStyle().layers.find((layer) => layer.type === "symbol");
+  addWmsRasterLayer(map, BURNT_AREAS_LAYER_ID, "burnt-areas", firstSymbolLayer?.id);
+}
+
+/** Adds the active-fires WMS raster overlays (hotspot points, rendered as
+ * triangles by the WMS server), one per satellite source — MODIS, VIIRS,
+ * and Sentinel-3 — stacked above the burnt-area polygons so hotspots stay
+ * visible where they overlap. All three are toggled together by main.ts's
+ * "Active fires" control, matching EFFIS's own default view. */
+function addActiveFiresLayers(map: Map): void {
+  const firstSymbolLayer = map.getStyle().layers.find((layer) => layer.type === "symbol");
+  for (const id of ACTIVE_FIRES_LAYER_IDS) {
+    addWmsRasterLayer(map, id, id, firstSymbolLayer?.id);
+  }
 }

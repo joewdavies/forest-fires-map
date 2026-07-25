@@ -1,7 +1,7 @@
 import "./style.css";
 import { Popup, type GeoJSONSource, type LngLat, type MapGeoJSONFeature, type MapLayerMouseEvent } from "maplibre-gl";
 import type { FeatureCollection } from "geojson";
-import { createMap, CURRENT_FIRES_LAYER_ID } from "./map";
+import { createMap, ACTIVE_FIRES_LAYER_IDS, BURNT_AREAS_LAYER_ID } from "./map";
 import { EffisError, fetchHistoricalFires, getBurntAreaHa, getCountry, getFireDateIso, getProvince } from "./effis";
 
 const FIRE_SOURCE_ID = "fires";
@@ -16,6 +16,9 @@ const statusEl = document.getElementById("status") as HTMLElement;
 const currentBtn = document.getElementById("mode-current") as HTMLButtonElement;
 const pastBtn = document.getElementById("mode-past") as HTMLButtonElement;
 const yearSelect = document.getElementById("year-select") as HTMLSelectElement;
+const layerToggle = document.getElementById("layer-toggle") as HTMLElement;
+const activeFiresCheckbox = document.getElementById("toggle-active-fires") as HTMLInputElement;
+const burntAreasCheckbox = document.getElementById("toggle-burnt-areas") as HTMLInputElement;
 
 let mode: Mode = "current";
 let requestId = 0;
@@ -62,6 +65,8 @@ pastBtn.addEventListener("click", () => setMode("past"));
 yearSelect.addEventListener("change", () => {
   if (mode === "past") loadFires();
 });
+activeFiresCheckbox.addEventListener("change", applyModeVisibility);
+burntAreasCheckbox.addEventListener("change", applyModeVisibility);
 
 function populateYearSelect() {
   const currentYear = new Date().getFullYear();
@@ -84,17 +89,26 @@ function setMode(next: Mode) {
   pastBtn.classList.toggle("active", mode === "past");
   pastBtn.setAttribute("aria-pressed", String(mode === "past"));
   yearSelect.hidden = mode !== "past";
+  layerToggle.hidden = mode !== "current";
   applyModeVisibility();
   loadFires();
 }
 
-/** Shows the layer for the active mode and hides the other — the raster
- * current-fires overlay (added in map.ts) and the vector past-fires layers
- * are two independent, always-present layers rather than one shared source,
- * since current fires render as WMS tiles and past fires as WFS vector
- * polygons (see effis.ts for why). */
+/** Shows the layers for the active mode — the WMS raster overlays (burnt
+ * areas + active fires, added in map.ts) for "Current fires", each also
+ * gated by its own checkbox, or the WFS vector layers for "Past fires".
+ * These are independent, always-present layers rather than one shared
+ * source, since current fires render as WMS tiles and past fires as WFS
+ * vector polygons (see effis.ts for why). */
 function applyModeVisibility() {
-  map.setLayoutProperty(CURRENT_FIRES_LAYER_ID, "visibility", mode === "current" ? "visible" : "none");
+  const burntAreasVisible = mode === "current" && burntAreasCheckbox.checked;
+  map.setLayoutProperty(BURNT_AREAS_LAYER_ID, "visibility", burntAreasVisible ? "visible" : "none");
+
+  const activeFiresVisible = mode === "current" && activeFiresCheckbox.checked;
+  for (const id of ACTIVE_FIRES_LAYER_IDS) {
+    map.setLayoutProperty(id, "visibility", activeFiresVisible ? "visible" : "none");
+  }
+
   const pastVisibility = mode === "past" ? "visible" : "none";
   map.setLayoutProperty(FIRE_FILL_LAYER, "visibility", pastVisibility);
   map.setLayoutProperty(FIRE_OUTLINE_LAYER, "visibility", pastVisibility);
@@ -112,10 +126,10 @@ function setStatus(message: string, state?: "error") {
 
 async function loadFires() {
   if (mode === "current") {
-    // No fetch needed — the raster layer loads its own tiles. EFFIS's WFS
+    // No fetch needed — the raster layers load their own tiles. EFFIS's WFS
     // (used for "Past fires" below) has been unreliable enough that current
     // fires render via WMS tiles instead; see effis.ts for why.
-    setStatus("Showing current fire perimeters (EFFIS Rapid Damage Assessment).");
+    setStatus("Showing live active fires and burnt areas from EFFIS.");
     return;
   }
 

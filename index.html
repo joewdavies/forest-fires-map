@@ -18,13 +18,19 @@
           </button>
         </div>
         <select id="year-select" hidden></select>
+        <div id="layer-toggle" role="group" aria-label="Fire layers">
+          <label class="layer-checkbox">
+            <input type="checkbox" id="toggle-active-fires" checked />
+            Active fires
+          </label>
+          <label class="layer-checkbox">
+            <input type="checkbox" id="toggle-burnt-areas" checked />
+            Burnt areas
+          </label>
+        </div>
         <span id="status" role="status"></span>
       </header>
       <div id="map"></div>
-      <footer id="attribution">
-        Data: <a href="https://forest-fire.emergency.copernicus.eu/" target="_blank" rel="noopener">EFFIS / Copernicus Emergency Management Service</a> ·
-        Basemap: <a href="https://openfreemap.org/" target="_blank" rel="noopener">OpenFreeMap</a>
-      </footer>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
