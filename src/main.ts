@@ -626,18 +626,6 @@ function updateLegend() {
       }
     }
   }
-
-  // 3. Borders
-  const bordersItem = document.getElementById("legend-item-borders");
-  if (bordersItem) {
-    bordersItem.style.display = (currentBasemap === "plain") ? "flex" : "none";
-  }
-
-  // 4. Place names
-  const placesItem = document.getElementById("legend-item-places");
-  if (placesItem) {
-    placesItem.style.display = placeLabelsCheckbox.checked ? "flex" : "none";
-  }
 }
 
 legendBtn.addEventListener("click", () => {
