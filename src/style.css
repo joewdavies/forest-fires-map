@@ -799,3 +799,129 @@ body {
     display: none !important;
   }
 }
+
+/* ---------- Legend FAB & Card Styling ---------- */
+
+#legend-btn {
+  top: 204px; /* Below layers (96px) and compass (150px) */
+}
+
+.legend-card {
+  position: absolute;
+  bottom: 40px;
+  right: 12px;
+  background: #1b1b1b;
+  border: 1px solid #2d2d2d;
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  z-index: 10;
+  width: 200px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(10px);
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.legend-card.open {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.legend-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid #2d2d2d;
+}
+
+.legend-header h3 {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #fff;
+}
+
+.legend-close {
+  background: transparent;
+  border: none;
+  color: #ccc;
+  font-size: 1.1rem;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+  transition: color 0.15s ease;
+}
+
+.legend-close:hover {
+  color: #fff;
+}
+
+.legend-body {
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: #ccc;
+}
+
+.legend-symbol {
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.symbol-active-fire {
+  background: #e25822;
+  border-radius: 50%;
+  border: 1px solid #ff7a45;
+}
+
+.symbol-burnt-area {
+  background: rgba(226, 88, 34, 0.4);
+  border: 1.5px solid #e25822;
+}
+
+.symbol-border {
+  background: transparent;
+  border-bottom: 2px solid #5e5e5e;
+  height: 8px;
+  border-radius: 0;
+}
+
+.symbol-places {
+  font-size: 0.65rem;
+  font-weight: bold;
+  color: #fff;
+  background: #444;
+  border-radius: 3px;
+}
+
+@media (max-width: 768px) {
+  .legend-card {
+    right: 50%;
+    transform: translate(50%, 10px);
+    bottom: 80px;
+    width: calc(100% - 32px);
+    max-width: 280px;
+  }
+
+  .legend-card.open {
+    transform: translate(50%, 0);
+  }
+}

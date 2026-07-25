@@ -67,6 +67,10 @@ const aboutBtn = document.getElementById("about-btn") as HTMLButtonElement;
 const aboutModal = document.getElementById("about-modal") as HTMLElement;
 const aboutCloseBtn = document.getElementById("about-close") as HTMLButtonElement;
 
+const legendBtn = document.getElementById("legend-btn") as HTMLButtonElement;
+const legendCard = document.getElementById("legend-card") as HTMLElement;
+const legendCloseBtn = document.getElementById("legend-close") as HTMLButtonElement;
+
 let mode: Mode = "current";
 let requestId = 0;
 let currentBasemap: BasemapKind = "plain";
@@ -96,16 +100,29 @@ map.on("load", () => {
   applyModeVisibility();
   setPlaceLabelsVisible(map, placeLabelsCheckbox.checked);
   loadFires();
+  updateLegend();
 });
 
 currentBtn.addEventListener("click", () => setMode("current"));
 pastBtn.addEventListener("click", () => setMode("past"));
 yearSelect.addEventListener("change", () => {
-  if (mode === "past") loadFires();
+  if (mode === "past") {
+    loadFires();
+    updateLegend();
+  }
 });
-activeFiresCheckbox.addEventListener("change", applyModeVisibility);
-burntAreasCheckbox.addEventListener("change", applyModeVisibility);
-placeLabelsCheckbox.addEventListener("change", () => setPlaceLabelsVisible(map, placeLabelsCheckbox.checked));
+activeFiresCheckbox.addEventListener("change", () => {
+  applyModeVisibility();
+  updateLegend();
+});
+burntAreasCheckbox.addEventListener("change", () => {
+  applyModeVisibility();
+  updateLegend();
+});
+placeLabelsCheckbox.addEventListener("change", () => {
+  setPlaceLabelsVisible(map, placeLabelsCheckbox.checked);
+  updateLegend();
+});
 
 for (const option of basemapOptions) {
   option.addEventListener("click", () => {
@@ -253,6 +270,7 @@ async function handleBasemapChange(kind: BasemapKind) {
   applyModeVisibility();
   setPlaceLabelsVisible(map, placeLabelsCheckbox.checked);
   loadFires();
+  updateLegend();
 }
 
 function populateYearSelect() {
@@ -279,6 +297,7 @@ function setMode(next: Mode) {
   layerToggle.hidden = mode !== "current";
   applyModeVisibility();
   loadFires();
+  updateLegend();
 }
 
 function applyModeVisibility() {
@@ -500,6 +519,7 @@ for (const option of langOptions) {
       setLanguage(lang);
       updateActiveLanguageOption();
       loadFires();
+      updateLegend();
     }
     langMenu.hidden = true;
     langBtn.classList.remove("active");
@@ -566,5 +586,81 @@ sheetBackdrop.addEventListener("click", () => {
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && !aboutModal.hidden) {
     closeAboutModal();
+  }
+});
+
+// --- Legend Logic --------------------------------------------------
+
+function updateLegend() {
+  const isCurrentMode = mode === "current";
+
+  // 1. Active fires
+  const activeFiresItem = document.getElementById("legend-item-active-fires");
+  if (activeFiresItem) {
+    activeFiresItem.style.display = (isCurrentMode && activeFiresCheckbox.checked) ? "flex" : "none";
+  }
+
+  // 2. Burnt areas / Past fires
+  const burntAreasItem = document.getElementById("legend-item-burnt-areas");
+  if (burntAreasItem) {
+    if (isCurrentMode) {
+      burntAreasItem.style.display = burntAreasCheckbox.checked ? "flex" : "none";
+      const labelEl = burntAreasItem.querySelector("span[data-i18n]");
+      if (labelEl) {
+        labelEl.setAttribute("data-i18n", "burnt_areas");
+        labelEl.textContent = t("burnt_areas");
+      }
+    } else {
+      burntAreasItem.style.display = "flex";
+      const labelEl = burntAreasItem.querySelector("span");
+      if (labelEl) {
+        labelEl.removeAttribute("data-i18n");
+        labelEl.textContent = `${t("burnt_areas")} (${yearSelect.value})`;
+      }
+    }
+  }
+
+  // 3. Borders
+  const bordersItem = document.getElementById("legend-item-borders");
+  if (bordersItem) {
+    bordersItem.style.display = (currentBasemap === "plain") ? "flex" : "none";
+  }
+
+  // 4. Place names
+  const placesItem = document.getElementById("legend-item-places");
+  if (placesItem) {
+    placesItem.style.display = placeLabelsCheckbox.checked ? "flex" : "none";
+  }
+}
+
+legendBtn.addEventListener("click", () => {
+  const isOpen = !legendCard.classList.contains("open");
+  if (isOpen) {
+    legendCard.hidden = false;
+    updateLegend();
+    requestAnimationFrame(() => {
+      legendCard.classList.add("open");
+    });
+  } else {
+    closeLegendCard();
+  }
+});
+
+function closeLegendCard() {
+  legendCard.classList.remove("open");
+  legendCard.addEventListener(
+    "transitionend",
+    () => {
+      legendCard.hidden = true;
+    },
+    { once: true }
+  );
+}
+
+legendCloseBtn.addEventListener("click", closeLegendCard);
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !legendCard.hidden) {
+    closeLegendCard();
   }
 });

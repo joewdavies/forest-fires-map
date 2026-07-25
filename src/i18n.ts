@@ -46,7 +46,10 @@ const translations: Record<Language, Record<string, string>> = {
     aria_change_language: "Change language",
     aria_about: "About",
     about_title: "About Forest Fires Map",
-    about_content_html: "<p>This application visualizes forest fire data across Europe in real-time and historically, using data from the European Forest Fire Information System (EFFIS).</p><p><strong>Sources:</strong></p><ul><li>Active Fires & Burnt Areas: <a href=\"https://effis.jrc.ec.europa.eu\" target=\"_blank\" rel=\"noopener\">EFFIS</a> (Copernicus Emergency Management Service)</li><li>Background maps: <a href=\"https://openfreemap.org\" target=\"_blank\" rel=\"noopener\">OpenFreeMap</a>, Carto Positron, OpenStreetMap contributors</li></ul>"
+    about_content_html: "<p>This application visualizes forest fire data across Europe in real-time and historically, using data from the European Forest Fire Information System (EFFIS).</p><p><strong>Sources:</strong></p><ul><li>Active Fires & Burnt Areas: <a href=\"https://effis.jrc.ec.europa.eu\" target=\"_blank\" rel=\"noopener\">EFFIS</a> (Copernicus Emergency Management Service)</li><li>Background maps: <a href=\"https://openfreemap.org\" target=\"_blank\" rel=\"noopener\">OpenFreeMap</a>, Carto Positron, OpenStreetMap contributors</li></ul>",
+    aria_legend: "Map Legend",
+    legend_title: "Legend",
+    legend_borders: "Country Borders"
   },
   es: {
     app_title: "Mapa de incendios forestales",
@@ -93,7 +96,10 @@ const translations: Record<Language, Record<string, string>> = {
     aria_change_language: "Cambiar idioma",
     aria_about: "Acerca de",
     about_title: "Acerca de Mapa de incendios forestales",
-    about_content_html: "<p>Esta aplicación visualiza datos de incendios forestales en Europa en tiempo real e históricos, utilizando datos del Sistema Europeo de Información sobre Incendios Forestales (EFFIS).</p><p><strong>Fuentes:</strong></p><ul><li>Incendios activos y áreas quemadas: <a href=\"https://effis.jrc.ec.europa.eu\" target=\"_blank\" rel=\"noopener\">EFFIS</a> (Copernicus Emergency Management Service)</li><li>Mapas de fondo: <a href=\"https://openfreemap.org\" target=\"_blank\" rel=\"noopener\">OpenFreeMap</a>, Carto Positron, colaboradores de OpenStreetMap</li></ul>"
+    about_content_html: "<p>Esta aplicación visualiza datos de incendios forestales en Europa en tiempo real e históricos, utilizando datos del Sistema Europeo de Información sobre Incendios Forestales (EFFIS).</p><p><strong>Fuentes:</strong></p><ul><li>Incendios activos y áreas quemadas: <a href=\"https://effis.jrc.ec.europa.eu\" target=\"_blank\" rel=\"noopener\">EFFIS</a> (Copernicus Emergency Management Service)</li><li>Mapas de fondo: <a href=\"https://openfreemap.org\" target=\"_blank\" rel=\"noopener\">OpenFreeMap</a>, Carto Positron, colaboradores de OpenStreetMap</li></ul>",
+    aria_legend: "Leyenda del mapa",
+    legend_title: "Leyenda",
+    legend_borders: "Límites nacionales"
   },
   de: {
     app_title: "Waldbrandkarte",
@@ -140,7 +146,10 @@ const translations: Record<Language, Record<string, string>> = {
     aria_change_language: "Sprache ändern",
     aria_about: "Über uns",
     about_title: "Über Waldbrandkarte",
-    about_content_html: "<p>Diese Anwendung visualisiert Echtzeit- und historische Waldbranddaten in ganz Europa unter Verwendung von Daten des Europäischen Waldbrandinformationssystems (EFFIS).</p><p><strong>Quellen:</strong></p><ul><li>Aktive Brände & Verbrannte Flächen: <a href=\"https://effis.jrc.ec.europa.eu\" target=\"_blank\" rel=\"noopener\">EFFIS</a> (Copernicus Emergency Management Service)</li><li>Hintergrundkarten: <a href=\"https://openfreemap.org\" target=\"_blank\" rel=\"noopener\">OpenFreeMap</a>, Carto Positron, OpenStreetMap-Mitwirkende</li></ul>"
+    about_content_html: "<p>Diese Anwendung visualisiert Echtzeit- und historische Waldbranddaten in ganz Europa unter Verwendung von Daten des Europäischen Waldbrandinformationssystems (EFFIS).</p><p><strong>Quellen:</strong></p><ul><li>Aktive Brände & Verbrannte Flächen: <a href=\"https://effis.jrc.ec.europa.eu\" target=\"_blank\" rel=\"noopener\">EFFIS</a> (Copernicus Emergency Management Service)</li><li>Hintergrundkarten: <a href=\"https://openfreemap.org\" target=\"_blank\" rel=\"noopener\">OpenFreeMap</a>, Carto Positron, OpenStreetMap-Mitwirkende</li></ul>",
+    aria_legend: "Legende",
+    legend_title: "Legende",
+    legend_borders: "Landesgrenzen"
   },
   fr: {
     app_title: "Carte des incendies de forêt",
@@ -187,7 +196,10 @@ const translations: Record<Language, Record<string, string>> = {
     aria_change_language: "Changer de langue",
     aria_about: "À propos",
     about_title: "À propos de la Carte des incendies de forêt",
-    about_content_html: "<p>Cette application visualise les données sur les incendies de forêt en Europe en temps réel et historiquement, à l'aide des données du Système européen d'information sur les incendies de forêt (EFFIS).</p><p><strong>Sources :</strong></p><ul><li>Incendies actifs et zones brûlées : <a href=\"https://effis.jrc.ec.europa.eu\" target=\"_blank\" rel=\"noopener\">EFFIS</a> (Copernicus Emergency Management Service)</li><li>Cartes de fond : <a href=\"https://openfreemap.org\" target=\"_blank\" rel=\"noopener\">OpenFreeMap</a>, Carto Positron, contributeurs d'OpenStreetMap</li></ul>"
+    about_content_html: "<p>Cette application visualise les données sur les incendies de forêt en Europe en temps réel et historiquement, à l'aide des données du Système européen d'information sur les incendies de forêt (EFFIS).</p><p><strong>Sources :</strong></p><ul><li>Incendies actifs et zones brûlées : <a href=\"https://effis.jrc.ec.europa.eu\" target=\"_blank\" rel=\"noopener\">EFFIS</a> (Copernicus Emergency Management Service)</li><li>Cartes de fond : <a href=\"https://openfreemap.org\" target=\"_blank\" rel=\"noopener\">OpenFreeMap</a>, Carto Positron, contributeurs d'OpenStreetMap</li></ul>",
+    aria_legend: "Légende",
+    legend_title: "Légende",
+    legend_borders: "Frontières nationales"
   },
 };
 
