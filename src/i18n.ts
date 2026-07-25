@@ -2,8 +2,8 @@ export type Language = "en" | "es";
 
 const translations: Record<Language, Record<string, string>> = {
   en: {
-    app_title: "European Forest Fires Map",
-    header_title: "European Forest Fires",
+    app_title: "Forest Fires Map",
+    header_title: "Forest Fires Map",
     aria_map_layers: "Map layers",
     layers_title: "Layers",
     aria_close: "Close",
@@ -43,8 +43,8 @@ const translations: Record<Language, Record<string, string>> = {
     aria_change_language: "Change language"
   },
   es: {
-    app_title: "Mapa de incendios forestales en Europa",
-    header_title: "Incendios Forestales en Europa",
+    app_title: "Mapa de incendios forestales",
+    header_title: "Mapa de incendios forestales",
     aria_map_layers: "Capas del mapa",
     layers_title: "Capas",
     aria_close: "Cerrar",
