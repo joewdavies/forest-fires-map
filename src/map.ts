@@ -1,4 +1,5 @@
 import {
+  AttributionControl,
   Map,
   NavigationControl,
   ScaleControl,
@@ -8,7 +9,11 @@ import {
 } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { fetchCountryBorders } from "./borders";
-import { resolveEffisTileRequest, tileTemplate, type WmsLayerKind } from "./effis";
+import {
+  resolveEffisTileRequest,
+  tileTemplate,
+  type WmsLayerKind,
+} from "./effis";
 
 // maplibre-gl v6 builds its tile-parsing Web Worker URL dynamically at
 // runtime, which Vite can't statically analyze to bundle as an asset (the
@@ -25,12 +30,16 @@ const EFFIS_ATTRIBUTION =
   '<a href="https://forest-fire.emergency.copernicus.eu/" target="_blank" rel="noopener">EFFIS / Copernicus Emergency Management Service</a>';
 
 export const BURNT_AREAS_LAYER_ID = "burnt-areas-raster";
-export const ACTIVE_FIRES_LAYER_IDS = ["active-fires-modis", "active-fires-viirs", "active-fires-s3"] as const;
+export const ACTIVE_FIRES_LAYER_IDS = [
+  "active-fires-modis",
+  "active-fires-viirs",
+  "active-fires-s3",
+] as const;
 
-// Roughly covers continental Europe, the Nordics, and the western Mediterranean.
-const EUROPE_BOUNDS: LngLatBoundsLike = [
-  [-25, 34],
-  [45, 72],
+// Default map view — mainland Spain plus the Balearic Islands.
+const DEFAULT_BOUNDS: LngLatBoundsLike = [
+  [-9.5, 35.8],
+  [4.5, 43.8],
 ];
 
 type Style = ReturnType<Map["getStyle"]>;
@@ -39,8 +48,12 @@ export async function createMap(container: HTMLElement): Promise<Map> {
   const map = new Map({
     container,
     style: await loadStrippedStyle(),
-    bounds: EUROPE_BOUNDS,
+    bounds: DEFAULT_BOUNDS,
     fitBoundsOptions: { padding: 20 },
+    // The default auto-added attribution control is always expanded
+    // regardless of map width; disable it and add our own compact one
+    // instead (collapsed to a small "i" icon, expanding on click/hover).
+    attributionControl: false,
     // Rewrites the placeholder tile URLs from tileTemplate() (see effis.ts)
     // into real EFFIS WMS GetMap requests. MapLibre has no native WMS/BBOX
     // tile support, so this is the standard way to adapt a WMS endpoint
@@ -59,8 +72,46 @@ export async function createMap(container: HTMLElement): Promise<Map> {
 
   map.addControl(new NavigationControl({ showCompass: false }), "top-right");
   map.addControl(new ScaleControl(), "bottom-left");
+  map.addControl(new AttributionControl({ compact: true }));
+  collapseAttributionControl(container);
 
   return map;
+}
+
+/**
+ * `compact: true` doesn't actually start collapsed — MapLibre's own
+ * AttributionControl deliberately shows itself expanded once on the very
+ * first render (so users see the attribution at least once), then only
+ * auto-collapses the first time the user drags the map. There's no public
+ * option to skip that initial reveal. Worse, it re-opens itself *again*
+ * every time the computed attribution text changes — which happens once
+ * per attributed source we add (GISCO, EFFIS), all added later inside the
+ * `load` handler above — so a single one-off cleanup right after
+ * `addControl` gets silently undone once those sources register.
+ *
+ * This reaches into the control's DOM output directly (it's a native
+ * `<details>` element) and force-collapses it — clearing the `open`
+ * attribute and the `maplibregl-compact-show` class MapLibre's own CSS
+ * keys off of — then keeps re-collapsing it via MutationObserver every
+ * time MapLibre flips `open` back on its own, until the user actually
+ * clicks the control themselves, at which point the observer steps aside
+ * and lets normal click-to-expand behaviour take over.
+ */
+function collapseAttributionControl(container: HTMLElement): void {
+  const attribution = container.querySelector<HTMLElement>(".maplibregl-ctrl-attrib");
+  if (!attribution) return;
+
+  const collapse = () => {
+    attribution.removeAttribute("open");
+    attribution.classList.remove("maplibregl-compact-show");
+  };
+  collapse();
+
+  const observer = new MutationObserver(collapse);
+  observer.observe(attribution, { attributes: true, attributeFilter: ["open"] });
+  attribution
+    .querySelector(".maplibregl-ctrl-attrib-button")
+    ?.addEventListener("click", () => observer.disconnect(), { once: true });
 }
 
 /**
@@ -81,7 +132,10 @@ async function loadStrippedStyle(): Promise<Style | string> {
   try {
     style = (await (await fetch(OPENFREEMAP_STYLE)).json()) as Style;
   } catch (err) {
-    console.warn("Failed to pre-fetch basemap style, falling back to default load path:", err);
+    console.warn(
+      "Failed to pre-fetch basemap style, falling back to default load path:",
+      err,
+    );
     return OPENFREEMAP_STYLE;
   }
 
@@ -90,56 +144,114 @@ async function loadStrippedStyle(): Promise<Style | string> {
   return style;
 }
 
+// Liberty's "place" source-layer covers 9 symbol layers, one per place
+// class (country/state/city/town/village, plus a "label_other" catch-all
+// for hamlets/neighbourhoods/suburbs/quarters). Town/village/other are by
+// far the densest across Europe at a continent-wide zoom, so they're the
+// ones dropped to keep labels from competing with the fire data for
+// attention — country/state/city labels stay for geographic context. This
+// is keyed by id (unlike the type/source-layer checks below) because
+// distinguishing place *classes* structurally isn't possible without
+// relying on each layer's filter expression; if Liberty renames these ids
+// upstream, the affected layers just fall back to being shown.
+const HIDDEN_PLACE_LABEL_IDS = new Set([
+  "label_village",
+  "label_town",
+  "label_other",
+]);
+
 /**
  * Reduces a Liberty style object to a white background plus black
- * place-name labels, so the fire polygons/tiles drawn on top (see main.ts
- * and the WMS raster layers below) are the only colour on the map. Works
- * structurally (by layer type / source-layer) rather than by layer id, so
- * it isn't tied to Liberty's exact ~110-layer list and keeps working if
- * that list changes upstream. Mutates `style.layers` in place.
+ * place-name labels (country/state/city only, see HIDDEN_PLACE_LABEL_IDS),
+ * so the fire polygons/tiles drawn on top (see main.ts and the WMS raster
+ * layers below) are the loudest thing on the map. Works structurally (by
+ * layer type / source-layer) rather than by layer id, so it isn't tied to
+ * Liberty's exact ~110-layer list and keeps working if that list changes
+ * upstream. Mutates `style.layers` in place.
  */
 function stripToPlaceLabelsOnly(style: Style): void {
   for (const layer of style.layers) {
     if (layer.type === "background") {
       layer.paint = { ...layer.paint, "background-color": "#ffffff" };
-    } else if (layer.type === "symbol" && layer["source-layer"] === "place") {
-      // Place-name labels (country/state/city/town/village) — keep their
-      // existing layout/hierarchy/halo as-is, just force the text black.
+    } else if (
+      layer.type === "symbol" &&
+      layer["source-layer"] === "place" &&
+      !HIDDEN_PLACE_LABEL_IDS.has(layer.id)
+    ) {
+      // Surviving place labels (country/state/city) — keep their existing
+      // layout/hierarchy/halo as-is, just force the text black.
       layer.paint = { ...layer.paint, "text-color": "#000000" };
     } else {
       // Everything else — roads, water, buildings, parks, POI icons, the
-      // shaded-relief raster, non-place labels — is hidden.
+      // shaded-relief raster, town/village/other labels, non-place labels —
+      // is hidden.
       layer.layout = { ...layer.layout, visibility: "none" };
     }
+  }
+}
+
+/** Toggles the surviving place labels (country/state/city — see
+ * HIDDEN_PLACE_LABEL_IDS) on or off, without touching anything else.
+ * Queries the live style rather than caching ids from `stripToPlaceLabelsOnly`
+ * so it stays correct if that function's set of kept layers ever changes. */
+export function setPlaceLabelsVisible(map: Map, visible: boolean): void {
+  const ids = map
+    .getStyle()
+    .layers.filter(
+      (layer) =>
+        layer.type === "symbol" &&
+        layer["source-layer"] === "place" &&
+        !HIDDEN_PLACE_LABEL_IDS.has(layer.id),
+    )
+    .map((layer) => layer.id);
+  for (const id of ids) {
+    map.setLayoutProperty(id, "visibility", visible ? "visible" : "none");
   }
 }
 
 /** Adds GISCO country border/coastline lines, in black, below the place
  * labels (so text stays legible) but above the (invisible) fill layers. */
 function addCountryBorders(map: Map): void {
-  const firstSymbolLayer = map.getStyle().layers.find((layer) => layer.type === "symbol");
+  const firstSymbolLayer = map
+    .getStyle()
+    .layers.find((layer) => layer.type === "symbol");
 
   map.addSource(BORDERS_SOURCE_ID, {
     type: "geojson",
     data: { type: "FeatureCollection", features: [] },
-    attribution: '<a href="https://gisco-services.ec.europa.eu/" target="_blank" rel="noopener">GISCO</a>',
+    attribution:
+      '<a href="https://gisco-services.ec.europa.eu/" target="_blank" rel="noopener">GISCO</a>',
   });
   map.addLayer(
     {
       id: BORDERS_LAYER_ID,
       type: "line",
       source: BORDERS_SOURCE_ID,
-      paint: { "line-color": "#000000", "line-width": 0.75 },
+      // Kept thin and light-grey rather than solid black — this is
+      // background context, not the thing the map is trying to show, and
+      // shouldn't compete with the fire layers for visual attention.
+      paint: {
+        "line-color": "#5e5e5e",
+        "line-width": 0.5,
+        "line-opacity": 0.9,
+      },
     },
     firstSymbolLayer?.id,
   );
 
   fetchCountryBorders()
-    .then((data) => (map.getSource(BORDERS_SOURCE_ID) as GeoJSONSource).setData(data))
+    .then((data) =>
+      (map.getSource(BORDERS_SOURCE_ID) as GeoJSONSource).setData(data),
+    )
     .catch((err) => console.warn("Failed to load country borders:", err));
 }
 
-function addWmsRasterLayer(map: Map, id: string, kind: WmsLayerKind, beforeId: string | undefined): void {
+function addWmsRasterLayer(
+  map: Map,
+  id: string,
+  kind: WmsLayerKind,
+  beforeId: string | undefined,
+): void {
   map.addSource(id, {
     type: "raster",
     tiles: [tileTemplate(kind)],
@@ -153,8 +265,15 @@ function addWmsRasterLayer(map: Map, id: string, kind: WmsLayerKind, beforeId: s
  * visible by default, below the place labels but above the country
  * borders. main.ts toggles its visibility via the "Burnt areas" control. */
 function addBurntAreasLayer(map: Map): void {
-  const firstSymbolLayer = map.getStyle().layers.find((layer) => layer.type === "symbol");
-  addWmsRasterLayer(map, BURNT_AREAS_LAYER_ID, "burnt-areas", firstSymbolLayer?.id);
+  const firstSymbolLayer = map
+    .getStyle()
+    .layers.find((layer) => layer.type === "symbol");
+  addWmsRasterLayer(
+    map,
+    BURNT_AREAS_LAYER_ID,
+    "burnt-areas",
+    firstSymbolLayer?.id,
+  );
 }
 
 /** Adds the active-fires WMS raster overlays (hotspot points, rendered as
@@ -163,7 +282,9 @@ function addBurntAreasLayer(map: Map): void {
  * visible where they overlap. All three are toggled together by main.ts's
  * "Active fires" control, matching EFFIS's own default view. */
 function addActiveFiresLayers(map: Map): void {
-  const firstSymbolLayer = map.getStyle().layers.find((layer) => layer.type === "symbol");
+  const firstSymbolLayer = map
+    .getStyle()
+    .layers.find((layer) => layer.type === "symbol");
   for (const id of ACTIVE_FIRES_LAYER_IDS) {
     addWmsRasterLayer(map, id, id, firstSymbolLayer?.id);
   }

@@ -1,7 +1,7 @@
 import "./style.css";
 import { Popup, type GeoJSONSource, type LngLat, type MapGeoJSONFeature, type MapLayerMouseEvent } from "maplibre-gl";
 import type { FeatureCollection } from "geojson";
-import { createMap, ACTIVE_FIRES_LAYER_IDS, BURNT_AREAS_LAYER_ID } from "./map";
+import { createMap, setPlaceLabelsVisible, ACTIVE_FIRES_LAYER_IDS, BURNT_AREAS_LAYER_ID } from "./map";
 import { EffisError, fetchHistoricalFires, getBurntAreaHa, getCountry, getFireDateIso, getProvince } from "./effis";
 
 const FIRE_SOURCE_ID = "fires";
@@ -19,6 +19,7 @@ const yearSelect = document.getElementById("year-select") as HTMLSelectElement;
 const layerToggle = document.getElementById("layer-toggle") as HTMLElement;
 const activeFiresCheckbox = document.getElementById("toggle-active-fires") as HTMLInputElement;
 const burntAreasCheckbox = document.getElementById("toggle-burnt-areas") as HTMLInputElement;
+const placeLabelsCheckbox = document.getElementById("toggle-place-labels") as HTMLInputElement;
 
 let mode: Mode = "current";
 let requestId = 0;
@@ -57,6 +58,7 @@ map.on("load", () => {
   });
 
   applyModeVisibility();
+  setPlaceLabelsVisible(map, placeLabelsCheckbox.checked);
   loadFires();
 });
 
@@ -67,6 +69,7 @@ yearSelect.addEventListener("change", () => {
 });
 activeFiresCheckbox.addEventListener("change", applyModeVisibility);
 burntAreasCheckbox.addEventListener("change", applyModeVisibility);
+placeLabelsCheckbox.addEventListener("change", () => setPlaceLabelsVisible(map, placeLabelsCheckbox.checked));
 
 function populateYearSelect() {
   const currentYear = new Date().getFullYear();
