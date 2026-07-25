@@ -1,5 +1,6 @@
 import { initTranslations, t, getLanguage, setLanguage, type Language } from "./i18n";
 import "./style.css";
+import legendConfig from "./legend-config.json";
 import {
   Popup,
   type GeoJSONSource,
@@ -70,6 +71,11 @@ const aboutCloseBtn = document.getElementById("about-close") as HTMLButtonElemen
 const legendBtn = document.getElementById("legend-btn") as HTMLButtonElement;
 const legendCard = document.getElementById("legend-card") as HTMLElement;
 const legendCloseBtn = document.getElementById("legend-close") as HTMLButtonElement;
+
+const activeFiresImg = document.getElementById("legend-img-active-fires") as HTMLImageElement | null;
+const activeFiresFallback = document.getElementById("legend-fallback-active-fires") as HTMLElement | null;
+const burntAreasImg = document.getElementById("legend-img-burnt-areas") as HTMLImageElement | null;
+const burntAreasFallback = document.getElementById("legend-fallback-burnt-areas") as HTMLElement | null;
 
 let mode: Mode = "current";
 let requestId = 0;
@@ -598,12 +604,24 @@ function updateLegend() {
   const activeFiresItem = document.getElementById("legend-item-active-fires");
   if (activeFiresItem) {
     activeFiresItem.style.display = (isCurrentMode && activeFiresCheckbox.checked) ? "flex" : "none";
+    if (activeFiresImg) {
+      activeFiresImg.style.display = "";
+    }
+    if (activeFiresFallback) {
+      activeFiresFallback.hidden = true;
+    }
   }
 
   // 2. Burnt areas / Past fires
   const burntAreasItem = document.getElementById("legend-item-burnt-areas");
-  const burntAreasImg = document.getElementById("legend-img-burnt-areas") as HTMLImageElement;
   if (burntAreasItem) {
+    if (burntAreasImg) {
+      burntAreasImg.style.display = "";
+    }
+    if (burntAreasFallback) {
+      burntAreasFallback.hidden = true;
+    }
+
     if (isCurrentMode) {
       burntAreasItem.style.display = burntAreasCheckbox.checked ? "flex" : "none";
       const labelEl = document.getElementById("legend-title-burnt-areas");
@@ -659,3 +677,67 @@ document.addEventListener("keydown", (e) => {
     closeLegendCard();
   }
 });
+
+// --- Fallback Legend Render Logic -----------------------------------
+
+function renderActiveFiresFallback() {
+  if (!activeFiresFallback) return;
+  let html = `<div class="legend-fallback-section">`;
+  legendConfig.activeFires.colors.forEach((item) => {
+    html += `
+      <div class="legend-fallback-row">
+        <span class="legend-fallback-color" style="background-color: ${item.color};"></span>
+        <span class="legend-fallback-label">${item.label}</span>
+      </div>`;
+  });
+  html += `</div><div class="legend-fallback-section">`;
+  legendConfig.activeFires.shapes.forEach((item) => {
+    let shapeSvg = "";
+    if (item.shape === "triangle") {
+      shapeSvg = `<svg width="12" height="12" viewBox="0 0 24 24" class="legend-fallback-shape"><polygon points="12 2, 22 22, 2 22" fill="#fff" /></svg>`;
+    } else {
+      shapeSvg = `<svg width="12" height="12" viewBox="0 0 24 24" class="legend-fallback-shape"><circle cx="12" cy="12" r="10" fill="#fff" /></svg>`;
+    }
+    html += `
+      <div class="legend-fallback-row">
+        ${shapeSvg}
+        <span class="legend-fallback-label">${item.label}</span>
+      </div>`;
+  });
+  html += `</div>`;
+  activeFiresFallback.innerHTML = html;
+}
+
+function renderBurntAreasFallback() {
+  if (!burntAreasFallback) return;
+  let html = `<div class="legend-fallback-section">`;
+  legendConfig.burntAreas.colors.forEach((item) => {
+    html += `
+      <div class="legend-fallback-row">
+        <span class="legend-fallback-swatch" style="background-color: ${item.color}; border: 1.5px solid ${item.borderColor};"></span>
+        <span class="legend-fallback-label">${item.label}</span>
+      </div>`;
+  });
+  html += `</div>`;
+  burntAreasFallback.innerHTML = html;
+}
+
+if (activeFiresImg) {
+  activeFiresImg.addEventListener("error", () => {
+    if (activeFiresImg) activeFiresImg.style.display = "none";
+    if (activeFiresFallback) {
+      activeFiresFallback.hidden = false;
+      renderActiveFiresFallback();
+    }
+  });
+}
+
+if (burntAreasImg) {
+  burntAreasImg.addEventListener("error", () => {
+    if (burntAreasImg) burntAreasImg.style.display = "none";
+    if (burntAreasFallback) {
+      burntAreasFallback.hidden = false;
+      renderBurntAreasFallback();
+    }
+  });
+}

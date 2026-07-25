@@ -1,0 +1,19 @@
+{
+  "activeFires": {
+    "colors": [
+      {"color": "#BE00FF", "label": "<= 6 hours"},
+      {"color": "#FFB4C8", "label": ">6 and <=12 hours"},
+      {"color": "#FF0000", "label": ">12 and <=24 hours"},
+      {"color": "#FF7F00", "label": "last 7 days"}
+    ],
+    "shapes": [
+      {"shape": "triangle", "label": "MODIS"},
+      {"shape": "circle", "label": "VIIRS / SENTINEL3"}
+    ]
+  },
+  "burntAreas": {
+    "colors": [
+      {"color": "rgba(226, 88, 34, 0.4)", "borderColor": "#e25822", "label": "Burnt Area"}
+    ]
+  }
+}

@@ -940,3 +940,62 @@ body {
     transform: translate(50%, 0);
   }
 }
+
+/* ---------- Custom Fallback Legend Styling ---------- */
+
+.legend-fallback {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.legend-fallback-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.legend-fallback-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: #ccc;
+}
+
+.legend-fallback-color {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+.legend-fallback-shape {
+  width: 10px;
+  height: 10px;
+  flex-shrink: 0;
+  color: #ccc;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.legend-fallback-shape svg {
+  width: 10px;
+  height: 10px;
+  display: block;
+}
+
+.legend-fallback-swatch {
+  width: 14px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+.legend-fallback-label {
+  white-space: nowrap;
+}
