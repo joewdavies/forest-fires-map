@@ -1,10 +1,10 @@
 {
   "activeFires": {
     "colors": [
-      {"color": "#BE00FF", "label": "≤6 h"},
-      {"color": "#FFB4C8", "label": "6–12 h"},
-      {"color": "#FF0000", "label": "12–24 h"},
-      {"color": "#FF7F00", "label": "Last 7 days"}
+      {"color": "#BE00FF", "labelKey": "legend_up_to_6_hours"},
+      {"color": "#FFB4C8", "labelKey": "legend_6_to_12_hours"},
+      {"color": "#FF0000", "labelKey": "legend_12_to_24_hours"},
+      {"color": "#FF7F00", "labelKey": "legend_last_7_days"}
     ],
     "shapes": [
       {"shape": "triangle", "label": "MODIS"},
@@ -13,8 +13,8 @@
   },
   "burntAreas": {
     "colors": [
-      {"color": "#FD7F7F", "borderColor": "#800000", "label": "last 1 day"},
-      {"color": "#FDBE7F", "borderColor": "#C07F00", "label": "last 7 days"}
+      {"color": "#FD7F7F", "borderColor": "#800000", "labelKey": "legend_last_1_day"},
+      {"color": "#FDBE7F", "borderColor": "#C07F00", "labelKey": "legend_last_7_days"}
     ]
   }
 }

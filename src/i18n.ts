@@ -50,6 +50,11 @@ const translations: Record<Language, Record<string, string>> = {
     about_content_html: "<p>This application visualizes forest fire data across Europe in real-time and historically, using data from the European Forest Fire Information System (EFFIS).</p><p><strong>Sources:</strong></p><ul><li>Active Fires & Burnt Areas: <a href=\"https://effis.jrc.ec.europa.eu\" target=\"_blank\" rel=\"noopener\">EFFIS</a> (Copernicus Emergency Management Service)</li><li>Background maps: <a href=\"https://openfreemap.org\" target=\"_blank\" rel=\"noopener\">OpenFreeMap</a>, OpenStreetMap contributors, and <a href=\"https://www.esri.com/\" target=\"_blank\" rel=\"noopener\">Esri</a> World Imagery</li></ul>",
     aria_legend: "Map Legend",
     legend_title: "Legend",
+    legend_up_to_6_hours: "≤6 h",
+    legend_6_to_12_hours: "6–12 h",
+    legend_12_to_24_hours: "12–24 h",
+    legend_last_1_day: "Last day",
+    legend_last_7_days: "Last 7 days",
     legend_borders: "Country Borders"
   },
   es: {
@@ -101,6 +106,11 @@ const translations: Record<Language, Record<string, string>> = {
     about_content_html: "<p>Esta aplicación visualiza datos de incendios forestales en Europa en tiempo real e históricos, utilizando datos del Sistema Europeo de Información sobre Incendios Forestales (EFFIS).</p><p><strong>Fuentes:</strong></p><ul><li>Incendios activos y áreas quemadas: <a href=\"https://effis.jrc.ec.europa.eu\" target=\"_blank\" rel=\"noopener\">EFFIS</a> (Copernicus Emergency Management Service)</li><li>Mapas de fondo: <a href=\"https://openfreemap.org\" target=\"_blank\" rel=\"noopener\">OpenFreeMap</a>, colaboradores de OpenStreetMap y <a href=\"https://www.esri.com/\" target=\"_blank\" rel=\"noopener\">Esri</a> World Imagery</li></ul>",
     aria_legend: "Leyenda del mapa",
     legend_title: "Leyenda",
+    legend_up_to_6_hours: "≤6 h",
+    legend_6_to_12_hours: "6–12 h",
+    legend_12_to_24_hours: "12–24 h",
+    legend_last_1_day: "Último día",
+    legend_last_7_days: "Últimos 7 días",
     legend_borders: "Límites nacionales"
   },
   de: {
@@ -152,6 +162,11 @@ const translations: Record<Language, Record<string, string>> = {
     about_content_html: "<p>Diese Anwendung visualisiert Echtzeit- und historische Waldbranddaten in ganz Europa unter Verwendung von Daten des Europäischen Waldbrandinformationssystems (EFFIS).</p><p><strong>Quellen:</strong></p><ul><li>Aktive Brände & Verbrannte Flächen: <a href=\"https://effis.jrc.ec.europa.eu\" target=\"_blank\" rel=\"noopener\">EFFIS</a> (Copernicus Emergency Management Service)</li><li>Hintergrundkarten: <a href=\"https://openfreemap.org\" target=\"_blank\" rel=\"noopener\">OpenFreeMap</a>, OpenStreetMap-Mitwirkende und <a href=\"https://www.esri.com/\" target=\"_blank\" rel=\"noopener\">Esri</a> World Imagery</li></ul>",
     aria_legend: "Legende",
     legend_title: "Legende",
+    legend_up_to_6_hours: "≤6 Std.",
+    legend_6_to_12_hours: "6–12 Std.",
+    legend_12_to_24_hours: "12–24 Std.",
+    legend_last_1_day: "Letzter Tag",
+    legend_last_7_days: "Letzte 7 Tage",
     legend_borders: "Landesgrenzen"
   },
   fr: {
@@ -203,6 +218,11 @@ const translations: Record<Language, Record<string, string>> = {
     about_content_html: "<p>Cette application visualise les données sur les incendies de forêt en Europe en temps réel et historiquement, à l'aide des données du Système européen d'information sur les incendies de forêt (EFFIS).</p><p><strong>Sources :</strong></p><ul><li>Incendies actifs et zones brûlées : <a href=\"https://effis.jrc.ec.europa.eu\" target=\"_blank\" rel=\"noopener\">EFFIS</a> (Copernicus Emergency Management Service)</li><li>Cartes de fond : <a href=\"https://openfreemap.org\" target=\"_blank\" rel=\"noopener\">OpenFreeMap</a>, contributeurs d'OpenStreetMap et <a href=\"https://www.esri.com/\" target=\"_blank\" rel=\"noopener\">Esri</a> World Imagery</li></ul>",
     aria_legend: "Légende",
     legend_title: "Légende",
+    legend_up_to_6_hours: "≤6 h",
+    legend_6_to_12_hours: "6–12 h",
+    legend_12_to_24_hours: "12–24 h",
+    legend_last_1_day: "Dernier jour",
+    legend_last_7_days: "7 derniers jours",
     legend_borders: "Frontières nationales"
   },
 };

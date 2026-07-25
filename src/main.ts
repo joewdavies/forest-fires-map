@@ -79,6 +79,9 @@ const searchContainer = document.getElementById(
 ) as HTMLElement;
 const searchInput = document.getElementById("search-input") as HTMLInputElement;
 const searchBtn = document.getElementById("search-btn") as HTMLButtonElement;
+const mapLoadingIndicator = document.getElementById(
+  "map-loading-indicator",
+) as HTMLElement;
 const searchResults = document.getElementById(
   "search-results",
 ) as HTMLUListElement;
@@ -129,6 +132,25 @@ const popup = new Popup({
   closeOnClick: true,
   maxWidth: "280px",
 });
+
+let loadingIndicatorHideTimer: number | undefined;
+
+function setMapLoading(loading: boolean): void {
+  window.clearTimeout(loadingIndicatorHideTimer);
+  if (loading) {
+    mapLoadingIndicator.classList.add("active");
+    return;
+  }
+
+  // A short delay prevents the indicator flashing between adjacent tile
+  // requests while a basemap or WMS/WMTS layer is still filling the view.
+  loadingIndicatorHideTimer = window.setTimeout(() => {
+    mapLoadingIndicator.classList.remove("active");
+  }, 150);
+}
+
+map.on("dataloading", () => setMapLoading(true));
+map.on("idle", () => setMapLoading(false));
 
 // Set initial basemap selection in UI
 for (const option of basemapOptions) {
@@ -275,10 +297,13 @@ layersSheet.addEventListener(
     const deltaY = sheetCurrentY - sheetStartY;
 
     if (deltaY > 0) {
+      // Stop mobile Chrome from interpreting the sheet drag as the
+      // viewport's pull-to-refresh gesture.
+      e.preventDefault();
       layersSheet.style.transform = `translateY(${deltaY}px)`;
     }
   },
-  { passive: true },
+  { passive: false },
 );
 
 layersSheet.addEventListener("touchend", () => {
@@ -315,10 +340,12 @@ function addFireLayer(map: MaplibreMap): void {
 }
 
 async function handleBasemapChange(kind: BasemapKind) {
+  setMapLoading(true);
   setStatus(t("loading_style"));
   try {
     await setBasemap(map, kind, placeLabelsCheckbox.checked);
   } catch (err) {
+    setMapLoading(false);
     console.warn("Failed to switch basemap:", err);
     setStatus(t("error_basemap"), "error");
     return;
@@ -799,7 +826,7 @@ function renderActiveFiresFallback() {
     html += `
       <div class="legend-fallback-row">
         <span class="legend-fallback-color" style="background-color: ${item.color};"></span>
-        <span class="legend-fallback-label">${item.label}</span>
+        <span class="legend-fallback-label">${t(item.labelKey)}</span>
       </div>`;
   });
   html += `</div><div class="legend-fallback-section">`;
@@ -827,7 +854,7 @@ function renderBurntAreasFallback() {
     html += `
       <div class="legend-fallback-row">
         <span class="legend-fallback-swatch" style="background-color: ${item.color}; border: 1.5px solid ${item.borderColor};"></span>
-        <span class="legend-fallback-label">${item.label}</span>
+        <span class="legend-fallback-label">${t(item.labelKey)}</span>
       </div>`;
   });
   html += `</div>`;

@@ -22,6 +22,7 @@ html,
 body {
   margin: 0;
   height: 100%;
+  overscroll-behavior-y: none;
 }
 
 #app {
@@ -553,6 +554,39 @@ body {
 #search-btn svg {
   width: 18px;
   height: 18px;
+}
+
+.map-loading-indicator {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 9px;
+  width: 22px;
+  height: 22px;
+  border: 3px solid rgba(255, 255, 255, 0.4);
+  border-top-color: #e25822;
+  border-radius: 50%;
+  background: rgba(27, 27, 27, 0.72);
+  box-shadow: 0 0 0 4px rgba(27, 27, 27, 0.72);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+  animation: map-loading-spin 0.75s linear infinite;
+}
+
+.map-loading-indicator.active {
+  opacity: 1;
+}
+
+@keyframes map-loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-loading-indicator {
+    animation-duration: 1.5s;
+  }
 }
 
 .search-results {
