@@ -25,7 +25,7 @@ const BORDERS_LAYER_ID = "country-borders-line";
 const EFFIS_ATTRIBUTION =
   '<a href="https://forest-fire.emergency.copernicus.eu/" target="_blank" rel="noopener">EFFIS / Copernicus Emergency Management Service</a>';
 
-export const BURNT_AREAS_LAYER_ID = "burnt-areas-raster";
+export const BURNT_AREAS_LAYER_IDS = ["burnt-areas-modis", "burnt-areas-nrt"] as const;
 export const ACTIVE_FIRES_LAYER_IDS = [
   "active-fires-modis",
   "active-fires-viirs",
@@ -54,7 +54,7 @@ export async function createMap(container: HTMLElement): Promise<Map> {
 
   map.on("load", () => {
     addCountryBorders(map);
-    addBurntAreasLayer(map);
+    addBurntAreasLayers(map);
     addActiveFiresLayers(map);
   });
 
@@ -252,20 +252,20 @@ function addWmtsRasterLayer(
   map.addLayer({ id, type: "raster", source: id }, beforeId);
 }
 
-/** Adds the burnt-area WMTS raster overlay (fire severity/perimeter
- * polygons), visible by default, below the place labels but above the
- * country borders. main.ts toggles its visibility via the "Burnt areas"
- * control. */
-function addBurntAreasLayer(map: Map): void {
+/** Adds the burnt-area WMTS raster overlays (fire perimeter polygons), one
+ * per source — MODIS and near-real-time — stacked together, visible by
+ * default, below the place labels but above the country borders. Both are
+ * toggled together by main.ts's "Burnt areas" control. Two sources, not
+ * one, because the layer originally used here alone (`severity_time.week`)
+ * turned out to render nothing — see the comment on `WmtsLayerKind` in
+ * effis.ts. */
+function addBurntAreasLayers(map: Map): void {
   const firstSymbolLayer = map
     .getStyle()
     .layers.find((layer) => layer.type === "symbol");
-  addWmtsRasterLayer(
-    map,
-    BURNT_AREAS_LAYER_ID,
-    "burnt-areas",
-    firstSymbolLayer?.id,
-  );
+  for (const id of BURNT_AREAS_LAYER_IDS) {
+    addWmtsRasterLayer(map, id, id, firstSymbolLayer?.id);
+  }
 }
 
 /** Adds the active-fires WMTS raster overlays (hotspot points, rendered as

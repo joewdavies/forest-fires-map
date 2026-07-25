@@ -1,7 +1,7 @@
 import "./style.css";
 import { Popup, type GeoJSONSource, type LngLat, type MapGeoJSONFeature, type MapLayerMouseEvent } from "maplibre-gl";
 import type { FeatureCollection } from "geojson";
-import { createMap, setPlaceLabelsVisible, ACTIVE_FIRES_LAYER_IDS, BURNT_AREAS_LAYER_ID } from "./map";
+import { createMap, setPlaceLabelsVisible, ACTIVE_FIRES_LAYER_IDS, BURNT_AREAS_LAYER_IDS } from "./map";
 import { EffisError, fetchHistoricalFires, getBurntAreaHa, getCountry, getFireDateIso, getProvince } from "./effis";
 
 const FIRE_SOURCE_ID = "fires";
@@ -97,15 +97,17 @@ function setMode(next: Mode) {
   loadFires();
 }
 
-/** Shows the layers for the active mode — the WMS raster overlays (burnt
+/** Shows the layers for the active mode — the WMTS raster overlays (burnt
  * areas + active fires, added in map.ts) for "Current fires", each also
  * gated by its own checkbox, or the WFS vector layers for "Past fires".
  * These are independent, always-present layers rather than one shared
- * source, since current fires render as WMS tiles and past fires as WFS
+ * source, since current fires render as WMTS tiles and past fires as WFS
  * vector polygons (see effis.ts for why). */
 function applyModeVisibility() {
   const burntAreasVisible = mode === "current" && burntAreasCheckbox.checked;
-  map.setLayoutProperty(BURNT_AREAS_LAYER_ID, "visibility", burntAreasVisible ? "visible" : "none");
+  for (const id of BURNT_AREAS_LAYER_IDS) {
+    map.setLayoutProperty(id, "visibility", burntAreasVisible ? "visible" : "none");
+  }
 
   const activeFiresVisible = mode === "current" && activeFiresCheckbox.checked;
   for (const id of ACTIVE_FIRES_LAYER_IDS) {

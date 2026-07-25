@@ -35,13 +35,14 @@ pipelines feeding independent, always-present map layers (toggled via
   layer set is visible directly in its URL —
   `?tiles=hsl,modis.hs.week,viirs.all.week,s3.hs.week,modis.ba.week,
   severity_time.week,nrt.ba.week`):
-  - **"Burnt areas"** (`BURNT_AREAS_LAYER_ID`, one raster source) — fire
-    severity/perimeter polygons.
+  - **"Burnt areas"** (`BURNT_AREAS_LAYER_IDS`, two raster sources
+    stacked) — fire perimeter polygons from two independent products
+    (MODIS + near-real-time).
   - **"Active fires"** (`ACTIVE_FIRES_LAYER_IDS`, three raster sources
     stacked) — hotspot detections from three independent satellite
     sources, rendered as points/triangles by the tile server itself.
 
-  Both are added in `map.ts`'s `addBurntAreasLayer()` /
+  Both are added in `map.ts`'s `addBurntAreasLayers()` /
   `addActiveFiresLayers()`. No fetch/parsing code of ours is involved for
   either — MapLibre requests tiles on demand like any raster source, and
   needs no custom adapter here: `effis.ts`'s `tileTemplate()` builds a
@@ -99,22 +100,27 @@ replace WFS there too.
 
 **Which WMTS layer, specifically, matters a lot.** `WMTS_LAYERS` in
 `src/effis.ts` maps each layer "kind" to its EFFIS WMTS layer identifier —
-all four now confirmed live and working (verified both via the HAR capture
-and by directly re-requesting each one):
+all five now confirmed live and working, each verified by actually
+decoding the returned PNG and looking at it, not just checking the HTTP
+status (a *reachable* layer can still silently return a blank tile — see
+`burnt-areas-modis`/`burnt-areas-nrt` below, which is exactly that bug):
 
-- `burnt-areas` → `severity_time.week` ("FIRE SEVERITY, weekly updated").
-  The *first* attempt at burnt areas used `modis.ba` over WMS ("MODIS/
-  SENTINEL2 (supervised)") — it responded, but it's a full land-cover
-  *classification* raster, not a fire-only one: most pixels are just
-  "vegetation" green rather than transparent, so it rendered as solid
-  green tiles almost everywhere instead of highlighting fires. If burnt
-  areas ever look like uniform colour blocks again rather than fire-shaped
-  patches, that's this same class of bug: check which layer is actually
-  being requested, not just whether the request succeeds. (EFFIS's own
-  viewer also stacks `modis.ba.week` and `nrt.ba.week` for this same
-  overlay; only `severity_time.week` is wired up here so far — the other
-  two are confirmed working too, in case richer burnt-area coverage is
-  ever worth the added tile requests.)
+- `burnt-areas-modis` / `burnt-areas-nrt` → `modis.ba.week` / `nrt.ba.week`,
+  stacked together (mirroring how `active-fires-*` stacks three sources)
+  under one "Burnt areas" toggle. The *original* choice here —
+  `severity_time.week` ("FIRE SEVERITY, weekly updated"), and before that
+  `severity_time` over WMS, and before *that* `modis.ba` over WMS ("MODIS/
+  SENTINEL2 (supervised)", a full land-cover classification that rendered
+  solid green almost everywhere instead of highlighting fires) — turned out
+  to be a dead end for a subtler reason than any of those: it's reachable
+  and returns HTTP 200, but the PNG it returns is *fully blank/transparent*
+  at every coordinate tested, including ones with clearly active nearby
+  fires. An HTTP-status-only check would never catch this; it was only
+  caught by fetching the tile and opening it as an image. `modis.ba.week`
+  and `nrt.ba.week` both returned real polygon data at the same
+  coordinates and are used instead. If burnt areas ever go blank again,
+  don't trust a "the requests are succeeding" check alone — decode a tile
+  and look at it, the same way this bug was found.
 - `active-fires-modis` / `active-fires-viirs` / `active-fires-s3` →
   `modis.hs.week` / `viirs.hs.week` / `s3.hs.week`. Note `viirs.hs.week`,
   *not* `viirs.all.week` — the app's own URL bar advertises `viirs.all.week`

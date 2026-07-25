@@ -151,15 +151,37 @@ export function fetchHistoricalFires(year: number): Promise<FeatureCollection> {
 // not "effis" — a distinct upstream mount, proxied separately in
 // api/wmts.ts), using `Service=WMTS&Request=GetTile` with an explicit
 // `time=<from>/<to>` range, not WMS's `BBOX`. Replaying that exact
-// request shape confirmed every `.week` layer below returns real image
-// data reliably. `viirs.hs.week` (not `viirs.all.week`, despite that being
-// the name in the viewer's own URL bar) is what its actual network calls
-// use — the URL's `tiles=` param and its real requests disagree, and the
-// real requests are what's been verified working.
-export type WmtsLayerKind = "burnt-areas" | "active-fires-modis" | "active-fires-viirs" | "active-fires-s3";
+// request shape confirmed every layer below returns real image data
+// reliably. `viirs.hs.week` (not `viirs.all.week`, despite that being the
+// name in the viewer's own URL bar) is what its actual network calls use —
+// the URL's `tiles=` param and its real requests disagree, and the real
+// requests are what's been verified working.
+//
+// "Burnt areas" stacks *two* layers, not one — `severity_time.week` (the
+// single layer originally used, both here and in the older WMS version)
+// turned out to return a fully blank/transparent tile at every coordinate
+// tested, even ones with clearly active nearby fires (confirmed by fetching
+// and visually inspecting the raw PNG, not just checking the HTTP status —
+// it was always a 683-byte "empty tile", not an error). `modis.ba.week` and
+// `nrt.ba.week` both returned real polygon data at the same coordinates, so
+// those two are used instead, matching how EFFIS's own viewer stacks all
+// three together (its blank contribution from `severity_time.week` would
+// just be invisible on top of the other two, which is presumably why the
+// official viewer never noticed it wasn't contributing anything for this
+// time range). If burnt areas ever go blank again, check whether it's
+// specifically `severity_time.week` regressing back into the mix, or
+// whether `modis.ba.week`/`nrt.ba.week` themselves have stopped returning
+// data.
+export type WmtsLayerKind =
+  | "burnt-areas-modis"
+  | "burnt-areas-nrt"
+  | "active-fires-modis"
+  | "active-fires-viirs"
+  | "active-fires-s3";
 
 const WMTS_LAYERS: Record<WmtsLayerKind, string> = {
-  "burnt-areas": "severity_time.week",
+  "burnt-areas-modis": "modis.ba.week",
+  "burnt-areas-nrt": "nrt.ba.week",
   "active-fires-modis": "modis.hs.week",
   "active-fires-viirs": "viirs.hs.week",
   "active-fires-s3": "s3.hs.week",
