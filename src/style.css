@@ -124,6 +124,41 @@ body {
   }
 }
 
+/* ---------- MapLibre Zoom Control Styling ---------- */
+
+.maplibregl-ctrl-group {
+  background: #1b1b1b !important;
+  border: none !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35) !important;
+  border-radius: 8px !important;
+  overflow: hidden;
+}
+
+.maplibregl-ctrl-group button {
+  background-color: transparent !important;
+  width: 36px !important;
+  height: 36px !important;
+  border: none !important;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s ease;
+}
+
+.maplibregl-ctrl-group button:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.maplibregl-ctrl-group button span.maplibregl-ctrl-icon {
+  filter: invert(1) brightness(2) !important;
+}
+
+/* Border separator between buttons in the group */
+.maplibregl-ctrl-group button + button {
+  border-top: 1px solid #2d2d2d !important;
+}
+
 #compass-btn {
   top: calc(max(80px, calc(env(safe-area-inset-top) + 80px)) + 54px);
   opacity: 0;
@@ -535,4 +570,75 @@ body {
   .search-container {
     width: calc(100% - 74px); /* Leave room for layers button */
   }
+}
+
+/* ---------- Language Dropdown Button ---------- */
+
+.lang-container {
+  position: relative;
+  display: inline-block;
+  flex: 0 0 auto;
+}
+
+.lang-btn {
+  background: transparent;
+  border: none;
+  color: #ccc;
+  cursor: pointer;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  padding: 0;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.lang-btn:hover,
+.lang-btn.active {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.lang-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.lang-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  background: #1b1b1b;
+  border: 1px solid #2d2d2d;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  padding: 4px 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  min-width: 110px;
+}
+
+.lang-option {
+  background: transparent;
+  border: none;
+  color: #ccc;
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.lang-option:hover {
+  background: #2d2d2d;
+  color: #fff;
+}
+
+.lang-option.active {
+  color: #e25822;
+  font-weight: 600;
 }

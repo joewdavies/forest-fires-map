@@ -39,7 +39,8 @@ const translations: Record<Language, Record<string, string>> = {
     error_load_failed: "Failed to load fire data.",
     aria_compass: "Reset orientation to North",
     search_placeholder: "Search for a place...",
-    aria_search: "Search"
+    aria_search: "Search",
+    aria_change_language: "Change language"
   },
   es: {
     app_title: "Mapa de incendios forestales en Europa",
@@ -79,7 +80,8 @@ const translations: Record<Language, Record<string, string>> = {
     error_load_failed: "Error al cargar los datos de los incendios.",
     aria_compass: "Restablecer orientación al Norte",
     search_placeholder: "Buscar un lugar...",
-    aria_search: "Buscar"
+    aria_search: "Buscar",
+    aria_change_language: "Cambiar idioma"
   }
 };
 
@@ -93,6 +95,11 @@ if (userLang.toLowerCase().startsWith("es")) {
 
 export function getLanguage(): Language {
   return currentLanguage;
+}
+
+export function setLanguage(lang: Language): void {
+  currentLanguage = lang;
+  initTranslations();
 }
 
 export function t(key: string, variables?: Record<string, string | number>): string {

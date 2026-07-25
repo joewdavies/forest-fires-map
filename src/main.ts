@@ -1,4 +1,4 @@
-import { initTranslations, t } from "./i18n";
+import { initTranslations, t, getLanguage, setLanguage, type Language } from "./i18n";
 import "./style.css";
 import {
   Popup,
@@ -53,6 +53,15 @@ const sheetBackdrop = document.getElementById("sheet-backdrop") as HTMLElement;
 const basemapOptions = document.querySelectorAll(".basemap-option") as NodeListOf<HTMLButtonElement>;
 const compassBtn = document.getElementById("compass-btn") as HTMLButtonElement;
 const compassNeedle = document.getElementById("compass-needle") as SVGElement | null;
+
+const searchContainer = document.getElementById("search-container") as HTMLElement;
+const searchInput = document.getElementById("search-input") as HTMLInputElement;
+const searchBtn = document.getElementById("search-btn") as HTMLButtonElement;
+const searchResults = document.getElementById("search-results") as HTMLUListElement;
+
+const langBtn = document.getElementById("lang-btn") as HTMLButtonElement;
+const langMenu = document.getElementById("lang-menu") as HTMLElement;
+const langOptions = document.querySelectorAll(".lang-option") as NodeListOf<HTMLButtonElement>;
 
 let mode: Mode = "current";
 let requestId = 0;
@@ -295,3 +304,163 @@ function showFirePopup(feature: MapGeoJSONFeature, lngLat: LngLat) {
   `;
   popup.setLngLat(lngLat).setHTML(html).addTo(map);
 }
+
+// --- Geocoder Search Logic -----------------------------------------
+
+interface GeocodeResult {
+  display_name: string;
+  lat: string;
+  lon: string;
+}
+
+let searchTimeoutId: number | null = null;
+let currentResults: GeocodeResult[] = [];
+
+searchInput.addEventListener("input", () => {
+  if (searchTimeoutId) {
+    clearTimeout(searchTimeoutId);
+  }
+  
+  const query = searchInput.value.trim();
+  if (query.length < 2) {
+    searchResults.hidden = true;
+    currentResults = [];
+    return;
+  }
+
+  searchTimeoutId = window.setTimeout(async () => {
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`,
+        {
+          headers: {
+            "User-Agent": "European-Forest-Fires-Map-App",
+          },
+        }
+      );
+      if (!response.ok) throw new Error("Search failed");
+      const data = (await response.json()) as GeocodeResult[];
+      currentResults = data;
+      renderSearchResults(data);
+    } catch (err) {
+      console.warn("Geocoding search failed:", err);
+    }
+  }, 300);
+});
+
+function renderSearchResults(results: GeocodeResult[]) {
+  searchResults.innerHTML = "";
+  if (results.length === 0) {
+    searchResults.hidden = true;
+    return;
+  }
+
+  results.forEach((res) => {
+    const li = document.createElement("li");
+    li.textContent = res.display_name;
+    li.addEventListener("click", () => {
+      selectPlace(res);
+    });
+    searchResults.appendChild(li);
+  });
+  searchResults.hidden = false;
+}
+
+function selectPlace(place: GeocodeResult) {
+  const lat = parseFloat(place.lat);
+  const lon = parseFloat(place.lon);
+  if (!isNaN(lat) && !isNaN(lon)) {
+    map.flyTo({ center: [lon, lat], zoom: 10 });
+    searchInput.value = place.display_name;
+    searchResults.hidden = true;
+    searchInput.blur();
+  }
+}
+
+searchBtn.addEventListener("click", performInstantSearch);
+searchInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    performInstantSearch();
+  }
+});
+
+async function performInstantSearch() {
+  const query = searchInput.value.trim();
+  if (!query) return;
+
+  if (currentResults.length > 0) {
+    selectPlace(currentResults[0]);
+    return;
+  }
+
+  try {
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`,
+      {
+        headers: {
+          "User-Agent": "European-Forest-Fires-Map-App",
+        },
+      }
+    );
+    if (!response.ok) return;
+    const data = (await response.json()) as GeocodeResult[];
+    if (data.length > 0) {
+      selectPlace(data[0]);
+    }
+  } catch (err) {
+    console.warn("Instant search failed:", err);
+  }
+}
+
+document.addEventListener("click", (e) => {
+  if (!searchContainer.contains(e.target as Node)) {
+    searchResults.hidden = true;
+  }
+});
+
+// --- Language Switcher Logic ---------------------------------------
+
+langBtn.addEventListener("click", (e) => {
+  e.stopPropagation();
+  const isOpen = !langMenu.hidden;
+  langMenu.hidden = isOpen;
+  langBtn.classList.toggle("active", !isOpen);
+});
+
+updateActiveLanguageOption();
+
+for (const option of langOptions) {
+  option.addEventListener("click", () => {
+    const lang = option.dataset.lang as Language;
+    if (lang !== getLanguage()) {
+      setLanguage(lang);
+      updateActiveLanguageOption();
+      loadFires();
+    }
+    langMenu.hidden = true;
+    langBtn.classList.remove("active");
+  });
+}
+
+function updateActiveLanguageOption() {
+  const currentLang = getLanguage();
+  for (const option of langOptions) {
+    const isActive = option.dataset.lang === currentLang;
+    option.classList.toggle("active", isActive);
+    option.setAttribute("aria-selected", String(isActive));
+  }
+}
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !langMenu.hidden) {
+    langMenu.hidden = true;
+    langBtn.classList.remove("active");
+  }
+});
+
+document.addEventListener("click", (e) => {
+  if (!langMenu.hidden && !langBtn.contains(e.target as Node) && !langMenu.contains(e.target as Node)) {
+    langMenu.hidden = true;
+    langBtn.classList.remove("active");
+  }
+});
