@@ -1,8 +1,9 @@
 # Plan: replace "Active fires" with NASA FIRMS, direct
 
-**Status: research complete, not yet implemented.** Written 2026-07-26.
-Nothing in this doc has been built — it's the plan to start from, not a
-record of what exists.
+**Status: research complete, architecture decided (Option A), not yet
+implemented.** Written 2026-07-26, decision confirmed same day. Nothing in
+this doc has been built — it's the plan to start from, not a record of what
+exists.
 
 ## Motivation
 
@@ -166,6 +167,36 @@ standing infrastructure before validating that real vector rendering
 actually looks and feels better in practice. B remains a reasonable
 upgrade later if real traffic/usage justifies it.
 
+**Decided: Option A (2026-07-26).** The rate-limit numbers came up during
+the decision and are worth recording precisely, since the reasoning
+generalizes beyond just this choice:
+
+- FIRMS's 5,000-transactions/10-min `MAP_KEY` limit only matters if every
+  visitor request round-trips to FIRMS directly, uncached. Vercel's own
+  "edge requests" metric (raised as a concern: ~6k/5min) is *not* a proxy
+  for that — it counts every asset (JS/CSS bundles, images, and every
+  individual raster tile fetch through the existing `/api/wmts`, which a
+  single pan/zoom multiplies across 5 stacked sources) — not hits on any
+  one fire-data endpoint specifically. A cached proxy (`Cache-Control:
+  public, max-age=1800` or similar) means FIRMS sees roughly one request
+  per cache-refresh window, completely decoupled from visitor volume,
+  whether that's 10 or 10,000 requests/min on the site itself.
+- Checked whether Supabase would sidestep this differently: it has no
+  FIRMS-style fixed "N requests per M minutes" cap on the data-serving
+  PostgREST API (the 120 req/min figure that turns up in search results is
+  for Supabase's *Management* API — project administration — not data
+  reads). Instead it's bounded by free-tier **egress bandwidth (5GB/month)**
+  and connection/compute limits. That's arguably a *tighter* constraint if
+  queried uncached — a few hundred KB of hotspot GeoJSON × thousands of
+  direct requests exhausts 5GB in minutes, not months.
+- Conclusion: a caching layer in front is mandatory regardless of which
+  backend sits behind it, and once it's there, both options are equally
+  insulated from traffic volume. So the choice between A and B should rest
+  entirely on the reasons that don't have a caching workaround — FIRMS
+  outage resilience and future history/trend features (arguments for B) vs.
+  minimal new infrastructure (the case for A) — not on rate limits either
+  way.
+
 ## Open questions / next steps
 
 - Confirm the actual `day_range` max for `api/area/csv` (docs disagreed:
@@ -182,3 +213,11 @@ upgrade later if real traffic/usage justifies it.
 - "Burnt areas" stays out of scope for this plan entirely — no FIRMS
   equivalent exists; would need a separate, heavier investigation into
   MCD64A1 or another burned-area source if that's ever revisited.
+- **Blocker before implementation can start on the `area/csv` path**: a
+  `MAP_KEY` has to be registered by hand at
+  https://firms.modaps.eosdis.nasa.gov/api/map_key/ (personal NASA
+  Earthdata registration — not something that can be done on the project's
+  behalf) and set as an env var (Vercel project settings + local `.env` for
+  dev, same shape as this app has no precedent for yet since neither
+  existing proxy needs a secret key). Not a blocker for the
+  `kml_fire_footprints` path, which needs no key at all.
