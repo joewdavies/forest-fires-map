@@ -230,30 +230,24 @@ const popup = new Popup({
 
 let loadingIndicatorHideTimer: number | undefined;
 let loadingIndicatorSafetyTimer: number | undefined;
-// MapLibre's 'idle' event can get stuck indefinitely once a raster tile
-// source enters a sustained error/retry loop against a flaky backend —
-// confirmed live: a repeatedly-erroring EFFIS WMTS tile source (see
-// CLAUDE.md's "Known unknowns" on EFFIS's backend strain) can mean 'idle'
-// never fires again for the rest of the session, since MapLibre keeps
-// retrying the failing tile and re-entering a loading state faster than it
-// ever lands on a clean "everything settled" snapshot. Without a ceiling,
-// the indicator would then spin forever even though nothing is actually
-// happening — same "don't trust EFFIS to behave, always have a timeout"
-// principle already applied everywhere else EFFIS is involved (see
-// REQUEST_TIMEOUT_MS in effis.ts and both api/*.ts proxies).
+let fireFetchesInFlight = 0;
+const loadingWmtsSources = new Set<string>();
+const EFFIS_WMTS_SOURCE_IDS = new Set<string>([
+  ...ACTIVE_FIRES_LAYER_IDS,
+  ...BURNT_AREAS_LAYER_IDS,
+  PAST_FIRES_LAYER_ID,
+]);
+// EFFIS raster sources can enter a sustained error/retry loop, so even this
+// fire-data-only indicator needs a hard ceiling rather than trusting every
+// source to eventually emit a clean completion event.
 const MAX_LOADING_INDICATOR_MS = 15_000;
 
 function setMapLoading(loading: boolean): void {
   window.clearTimeout(loadingIndicatorHideTimer);
   if (loading) {
     mapLoadingIndicator.classList.add("active");
-    // Only arm the safety timer on the *first* 'dataloading' of a new
-    // loading streak (guarded by the undefined check) — re-arming it on
-    // every subsequent 'dataloading' would measure "time since the most
-    // recent event" instead of "how long this streak has run", which is
-    // exactly the retry-loop pattern this exists to catch: a source that
-    // keeps re-entering 'dataloading' forever would just keep pushing the
-    // ceiling back out and never actually hit it.
+    // Only arm the safety timer on the first event in a loading streak.
+    // Re-arming it for every retry would keep pushing the ceiling back.
     if (loadingIndicatorSafetyTimer === undefined) {
       loadingIndicatorSafetyTimer = window.setTimeout(() => {
         loadingIndicatorSafetyTimer = undefined;
@@ -266,15 +260,51 @@ function setMapLoading(loading: boolean): void {
   window.clearTimeout(loadingIndicatorSafetyTimer);
   loadingIndicatorSafetyTimer = undefined;
 
-  // A short delay prevents the indicator flashing between adjacent tile
-  // requests while a basemap or WMS/WMTS layer is still filling the view.
+  // A short delay prevents flashing between adjacent fire-tile requests.
   loadingIndicatorHideTimer = window.setTimeout(() => {
     mapLoadingIndicator.classList.remove("active");
   }, 150);
 }
 
-map.on("dataloading", () => setMapLoading(true));
-map.on("idle", () => setMapLoading(false));
+function updateFireLoadingIndicator(): void {
+  setMapLoading(fireFetchesInFlight > 0 || loadingWmtsSources.size > 0);
+}
+
+function beginFireFetch(): void {
+  ++fireFetchesInFlight;
+  updateFireLoadingIndicator();
+}
+
+function endFireFetch(): void {
+  fireFetchesInFlight = Math.max(0, fireFetchesInFlight - 1);
+  updateFireLoadingIndicator();
+}
+
+map.on("dataloading", (event) => {
+  if (event.dataType !== "source") return;
+  if (event.sourceId && EFFIS_WMTS_SOURCE_IDS.has(event.sourceId)) {
+    loadingWmtsSources.add(event.sourceId);
+    updateFireLoadingIndicator();
+  }
+});
+map.on("sourcedata", (event) => {
+  if (
+    event.sourceId &&
+    EFFIS_WMTS_SOURCE_IDS.has(event.sourceId) &&
+    (event.isSourceLoaded ||
+      (map.getSource(event.sourceId) && map.isSourceLoaded(event.sourceId)))
+  ) {
+    loadingWmtsSources.delete(event.sourceId);
+    updateFireLoadingIndicator();
+  }
+});
+map.on("error", (event) => {
+  const sourceId = (event as typeof event & { sourceId?: string }).sourceId;
+  if (sourceId && EFFIS_WMTS_SOURCE_IDS.has(sourceId)) {
+    loadingWmtsSources.delete(sourceId);
+    updateFireLoadingIndicator();
+  }
+});
 
 // Set initial basemap selection in UI
 for (const option of basemapOptions) {
@@ -459,6 +489,8 @@ async function engageFirmsFallback(showStartupStatus = false): Promise<void> {
   activeFiresProvider = "firms";
   updateActiveFiresSourceUi();
   removeEffisWmtsLayers(map);
+  loadingWmtsSources.clear();
+  updateFireLoadingIndicator();
   applyModeVisibility();
   updateLegend();
   if (showStartupStatus) providerFallbackStatus.hidden = false;
@@ -490,9 +522,14 @@ function disengageFirmsFallback(): void {
 
 async function refreshFirmsData(): Promise<void> {
   const thisRequest = ++firmsRequestId;
-  const data = await fetchActiveFiresFallback(EUROPE_BBOX);
-  if (thisRequest !== firmsRequestId) return; // stale-response guard, same pattern as loadFires()
-  (map.getSource(FIRMS_SOURCE_ID) as GeoJSONSource | undefined)?.setData(data);
+  beginFireFetch();
+  try {
+    const data = await fetchActiveFiresFallback(EUROPE_BBOX);
+    if (thisRequest !== firmsRequestId) return; // stale-response guard, same pattern as loadFires()
+    (map.getSource(FIRMS_SOURCE_ID) as GeoJSONSource | undefined)?.setData(data);
+  } finally {
+    endFireFetch();
+  }
 }
 
 function updateActiveFiresSourceUi(): void {
@@ -912,7 +949,6 @@ function firmsIconSizeExpression(): ExpressionSpecification {
 }
 
 async function handleBasemapChange(kind: BasemapKind) {
-  setMapLoading(true);
   setStatus(t("loading_style"));
   try {
     await setBasemap(
@@ -923,7 +959,6 @@ async function handleBasemapChange(kind: BasemapKind) {
       activeFiresProvider === "effis",
     );
   } catch (err) {
-    setMapLoading(false);
     console.warn("Failed to switch basemap:", err);
     setStatus(t("error_basemap"), "error");
     return;
@@ -1044,6 +1079,7 @@ function setStatus(message: string, state?: "error") {
 
 async function loadFires() {
   if (mode === "current") {
+    ++requestId;
     setStatus(t("live_fires_status"));
     return;
   }
@@ -1053,6 +1089,7 @@ async function loadFires() {
   if (!source) return;
 
   const year = yearSelect.value;
+  beginFireFetch();
   setStatus(t("loading_year_fires", { year }));
 
   try {
@@ -1068,6 +1105,8 @@ async function loadFires() {
       err instanceof EffisError ? err.message : t("error_load_failed"),
       "error",
     );
+  } finally {
+    endFireFetch();
   }
 }
 

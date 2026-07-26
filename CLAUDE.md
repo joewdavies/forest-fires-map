@@ -539,33 +539,22 @@ update them on its own until the pre-scripts rerun.
 "maplibre-gl"` (the v4-era pattern) fails to compile — use named imports
 (`import { Map, NavigationControl, Popup, ... } from "maplibre-gl"`).
 
-**MapLibre's `'idle'` event can get stuck forever once a raster tile source
-enters a sustained error/retry loop — confirmed live, not just suspected,
-against EFFIS's own real flakiness.** `main.ts`'s `#map-loading-indicator`
-spinner is driven by `map.on('dataloading', ...)` / `map.on('idle', ...)` —
-show on the former, hide (after a 150ms debounce) on the latter. Traced the
-raw event stream directly (`map.on('error'/'dataloading'/'data'/'idle', ...)`)
-against a session where EFFIS's `burnt-areas-modis` WMTS tiles were
-genuinely failing: tiles errored repeatedly, `map.loaded()` still reported
-`true` throughout, but **zero `'idle'` events fired at all** for the rest of
-the trace — MapLibre kept re-entering a loading state for retries faster
-than it ever landed on a clean "everything settled" snapshot, so `'idle'`
-never got a chance to fire. Without a ceiling, the spinner would then spin
-forever even though nothing is actually happening — this was reported as
-"the spinner just hangs," and reproduced by blocking `/api/wmts` entirely
-(a route that never resolves at all reproduces the same stuck-forever
-state as a source that errors-and-retries forever). Fixed with
-`MAX_LOADING_INDICATOR_MS` (15s) in `setMapLoading()`: a safety timer armed
-only on the *first* `'dataloading'` of a new loading streak (an `=== undefined`
-guard prevents subsequent `'dataloading'` events from re-arming it, which
-would just measure "time since the most recent event" and never actually
-fire during exactly the retry loop this exists to catch) force-hides the
-indicator if `'idle'` hasn't shown up by then — same "don't trust EFFIS's
-lifecycle to behave, always have a timeout" principle as `REQUEST_TIMEOUT_MS`
-elsewhere. Verified this isn't just theoretical: re-running the exact same
-check against the live (unblocked) dev session showed the real backend
-hitting this same condition and the safety net rescuing it, both landing at
-the same 15s mark.
+**The centered loading spinner represents fire data only, never background
+map work.** `main.ts` filters MapLibre `dataloading`/`sourcedata`/`error`
+events to the EFFIS WMTS source IDs, while the WFS historical-fire and FIRMS
+fetch functions explicitly increment/decrement `fireFetchesInFlight`.
+Basemap styles, place-label tiles, borders, geocoding, and other requests do
+not activate it; the HTML no longer seeds the indicator with `active`
+either, so the initial basemap load is silent. `loadingWmtsSources` tracks
+the fire raster sources still loading, and a 150ms hide debounce prevents
+flashing between adjacent fire tiles.
+
+The 15s `MAX_LOADING_INDICATOR_MS` safety ceiling remains necessary because
+an EFFIS raster source can enter a sustained error/retry loop without a
+clean completion event. The timer is armed only on the first event in a
+loading streak; retries cannot push the ceiling back indefinitely. This is
+the same "don't trust EFFIS's lifecycle to behave, always have a timeout"
+principle used by the EFFIS request paths.
 
 ## Key files
 
