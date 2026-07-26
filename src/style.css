@@ -599,6 +599,23 @@ body {
   color: #fff;
 }
 
+.segmented-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* A visually-subordinate variant for a control nested under a detail-row
+   (e.g. "Active fires" source Auto/EFFIS/FIRMS), rather than a top-level
+   choice like the Current/Past fires mode toggle. */
+.segmented-sm {
+  margin: 0.4rem 0 0.6rem;
+}
+
+.segmented-sm .segmented-btn {
+  padding: 0.35rem 0.4rem;
+  font-size: 0.72rem;
+}
+
 #year-select {
   width: 100%;
   margin-top: 0.6rem;

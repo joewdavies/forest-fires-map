@@ -60,6 +60,14 @@ const EARLIEST_YEAR = 2000;
 const FIRMS_SOURCE_ID = "active-fires-firms";
 const FIRMS_LAYER_ID = "active-fires-firms-circles";
 const FIRMS_REFRESH_INTERVAL_MS = 15 * 60 * 1000;
+// The rolling-window "down" threshold in effisHealth.ts (4 failures/20s) is
+// tuned for detecting sustained degradation, and needs an actual error
+// event to count anything — a request that just hangs forever without ever
+// erroring wouldn't trip it for a long time, if ever. This is a separate,
+// much blunter one-shot check specifically for a cold, silent start: if
+// nothing at all has come back from EFFIS's WMTS mount within 5s of the
+// page loading, don't wait around for the failure counter to catch up.
+const INITIAL_LOAD_TIMEOUT_MS = 5_000;
 
 // Linked from the word "EFFIS" in the health warning banner (see
 // effis_status_slow/effis_status_down below) — deliberately a *direct*
@@ -75,6 +83,12 @@ const EFFIS_EXAMPLE_REQUEST_URL =
   "https://maps.effis.emergency.copernicus.eu/effist/wmts?layer=ghsl&tilematrixset=ECMWF3857&Service=WMTS&Request=GetTile&Version=1.0.0&Format=image%2Fpng&TileMatrix=5&TileCol=17&TileRow=12";
 
 type Mode = "current" | "past";
+// "auto" defers to watchEffisHealth/the cold-start check; "effis"/"firms"
+// are an explicit user pin that suppresses both until switched back to
+// "auto" — otherwise a user picking "EFFIS" while it's down would just get
+// silently overridden back to FIRMS moments later, which would look broken
+// rather than intentional.
+type ActiveFiresSourceMode = "auto" | "effis" | "firms";
 
 const mapContainer = document.getElementById("map") as HTMLElement;
 const statusEl = document.getElementById("status") as HTMLElement;
@@ -124,6 +138,16 @@ const effisWarningText = document.getElementById(
 ) as HTMLElement;
 const effisWarningClose = document.getElementById(
   "effis-warning-close",
+) as HTMLButtonElement;
+
+const activeFiresSourceAutoBtn = document.getElementById(
+  "active-fires-source-auto",
+) as HTMLButtonElement;
+const activeFiresSourceEffisBtn = document.getElementById(
+  "active-fires-source-effis",
+) as HTMLButtonElement;
+const activeFiresSourceFirmsBtn = document.getElementById(
+  "active-fires-source-firms",
 ) as HTMLButtonElement;
 
 const searchContainer = document.getElementById(
@@ -178,10 +202,13 @@ let measurementStart: LngLat | null = null;
 let measurementEnd: LngLat | null = null;
 let measurementPreview: LngLat | null = null;
 let currentEffisHealth: EffisHealth = "ok";
+let currentActiveFiresHealth: EffisHealth = "ok";
 let dismissedEffisHealth: EffisHealth | null = null;
 let activeFiresProvider: "effis" | "firms" = "effis";
+let activeFiresSourceMode: ActiveFiresSourceMode = "auto";
 let firmsRefreshTimer: number | undefined;
 let firmsRequestId = 0;
+let firmsEngagedByColdStart = false;
 
 populateYearSelect();
 
@@ -226,6 +253,7 @@ map.on("load", () => {
   addFirmsActiveFiresLayer(map);
   addMeasurementLayers();
   watchEffisHealth(map, handleEffisHealthChange);
+  watchWmtsActivity();
 
   map.on("mouseenter", FIRE_FILL_LAYER, () => {
     if (!measurementActive) map.getCanvas().style.cursor = "pointer";
@@ -354,6 +382,7 @@ function effisWarningHtml(health: EffisHealth): string {
 
 function handleEffisHealthChange(report: EffisHealthReport): void {
   currentEffisHealth = report.overall;
+  currentActiveFiresHealth = report.activeFires;
   if (report.overall === "ok") {
     dismissedEffisHealth = null;
     effisWarning.hidden = true;
@@ -362,9 +391,29 @@ function handleEffisHealthChange(report: EffisHealthReport): void {
     effisWarning.hidden = false;
   }
 
+  if (activeFiresSourceMode !== "auto") return; // user has pinned a provider — don't override their choice
+
   if (report.activeFires === "down" && activeFiresProvider === "effis") {
     engageFirmsFallback();
-  } else if (report.activeFires !== "down" && activeFiresProvider === "firms") {
+  } else if (
+    report.activeFires !== "down" &&
+    activeFiresProvider === "firms" &&
+    (!firmsEngagedByColdStart || wmtsAppearsResponsive)
+  ) {
+    // The extra (!firmsEngagedByColdStart || wmtsAppearsResponsive) clause
+    // only matters for a switch the cold-start check triggered: that path
+    // starts with zero recorded failures (a hung request never errors, so
+    // there's nothing for the failure counter to count), so
+    // report.activeFires reads as "ok" from the very first health recheck
+    // — not because EFFIS recovered, but because nothing was ever proven
+    // broken in the first place. Disengaging on that basis alone would
+    // revert the switch within moments of it happening (confirmed by
+    // reproducing it live, not just reasoned about) — so a cold-start-
+    // triggered switch additionally requires positive proof
+    // (wmtsAppearsResponsive) before reverting. A normal failure-threshold-
+    // triggered switch doesn't need that extra proof — it already has real
+    // evidence either way — so this leaves that path's existing, tested
+    // cooldown-based recovery unchanged.
     disengageFirmsFallback();
   }
 }
@@ -389,8 +438,9 @@ function refreshEffisWarningText(): void {
 // only engages as a fallback, and only for "Active fires" — "Burnt areas"
 // and "Past fires" have no FIRMS equivalent and are untouched by this.
 
-async function engageFirmsFallback(): Promise<void> {
+async function engageFirmsFallback(triggeredByColdStart = false): Promise<void> {
   activeFiresProvider = "firms";
+  firmsEngagedByColdStart = triggeredByColdStart;
   applyModeVisibility(); // hide the broken EFFIS tiles immediately, before awaiting the fetch below
   updateLegend();
   await refreshFirmsData();
@@ -399,6 +449,7 @@ async function engageFirmsFallback(): Promise<void> {
 
 function disengageFirmsFallback(): void {
   activeFiresProvider = "effis";
+  firmsEngagedByColdStart = false;
   window.clearInterval(firmsRefreshTimer);
   firmsRefreshTimer = undefined;
   ++firmsRequestId; // invalidate any in-flight refresh so a late response can't overwrite state after we've moved on
@@ -412,6 +463,90 @@ async function refreshFirmsData(): Promise<void> {
   const data = await fetchActiveFiresFallback(EUROPE_BBOX);
   if (thisRequest !== firmsRequestId) return; // stale-response guard, same pattern as loadFires()
   (map.getSource(FIRMS_SOURCE_ID) as GeoJSONSource | undefined)?.setData(data);
+}
+
+// Manual override, exposed as the Auto/EFFIS/FIRMS control in the layers
+// sheet — "auto" resumes deferring to watchEffisHealth (and re-syncs
+// immediately against the latest known health rather than waiting for the
+// next change event, so switching back to "auto" reflects reality right
+// away); "effis"/"firms" force that provider regardless of health, and
+// suppress handleEffisHealthChange/the cold-start check from overriding it.
+function setActiveFiresSourceMode(nextMode: ActiveFiresSourceMode): void {
+  activeFiresSourceMode = nextMode;
+  updateActiveFiresSourceUi();
+
+  if (nextMode === "effis") {
+    if (activeFiresProvider === "firms") disengageFirmsFallback();
+  } else if (nextMode === "firms") {
+    if (activeFiresProvider === "effis") engageFirmsFallback();
+  } else if (currentActiveFiresHealth === "down") {
+    if (activeFiresProvider === "effis") engageFirmsFallback();
+  } else if (activeFiresProvider === "firms") {
+    disengageFirmsFallback();
+  }
+}
+
+function updateActiveFiresSourceUi(): void {
+  const buttons: [ActiveFiresSourceMode, HTMLButtonElement][] = [
+    ["auto", activeFiresSourceAutoBtn],
+    ["effis", activeFiresSourceEffisBtn],
+    ["firms", activeFiresSourceFirmsBtn],
+  ];
+  for (const [mode, btn] of buttons) {
+    const isActive = mode === activeFiresSourceMode;
+    btn.classList.toggle("active", isActive);
+    btn.setAttribute("aria-pressed", String(isActive));
+  }
+}
+
+function updateActiveFiresSourceControlState(): void {
+  const enabled = mode === "current" && activeFiresCheckbox.checked;
+  activeFiresSourceAutoBtn.disabled = !enabled;
+  activeFiresSourceEffisBtn.disabled = !enabled;
+  activeFiresSourceFirmsBtn.disabled = !enabled;
+}
+
+activeFiresSourceAutoBtn.addEventListener("click", () => setActiveFiresSourceMode("auto"));
+activeFiresSourceEffisBtn.addEventListener("click", () => setActiveFiresSourceMode("effis"));
+activeFiresSourceFirmsBtn.addEventListener("click", () => setActiveFiresSourceMode("firms"));
+
+// Tracks whether /api/wmts has produced *any* completed response yet
+// (success or failure — just evidence the mount is alive at all), scoped at
+// the same mount granularity effisHealth.ts's slow-response tracking
+// already uses (see its "Known unknowns"-referenced reasoning in
+// CLAUDE.md) rather than trying to isolate active-fires specifically — if
+// the mount is silent, active fires is silent too. Stays alive (not
+// disconnected) for the whole session: watchWmtsActivity below uses it once
+// for the initial cold-start decision, but handleEffisHealthChange's
+// auto-disengage also needs it on an ongoing basis (see the comment there
+// for why report.activeFires alone isn't enough).
+let wmtsAppearsResponsive = false;
+
+// See INITIAL_LOAD_TIMEOUT_MS above for why this exists alongside
+// watchEffisHealth's own rolling-window detection: that one needs an actual
+// *error* event to count anything, so a request that just hangs forever —
+// never erroring, never resolving — wouldn't trip it for a long time, if
+// ever. This is a blunter, one-shot check specifically for that "totally
+// silent" cold start.
+function watchWmtsActivity(): void {
+  const observer = new PerformanceObserver((list) => {
+    for (const entry of list.getEntries()) {
+      if (/\/api\/wmts(\?|$)/.test(entry.name)) {
+        wmtsAppearsResponsive = true;
+      }
+    }
+  });
+  observer.observe({ type: "resource", buffered: true });
+
+  window.setTimeout(() => {
+    if (
+      !wmtsAppearsResponsive &&
+      activeFiresSourceMode === "auto" &&
+      activeFiresProvider === "effis"
+    ) {
+      engageFirmsFallback(true);
+    }
+  }, INITIAL_LOAD_TIMEOUT_MS);
 }
 
 function startMeasurement(): void {
@@ -775,6 +910,7 @@ function applyModeVisibility() {
     "visibility",
     showFirmsActiveFires ? "visible" : "none",
   );
+  updateActiveFiresSourceControlState();
 
   const pastVisibility = mode === "past" ? "visible" : "none";
   map.setLayoutProperty(FIRE_FILL_LAYER, "visibility", pastVisibility);

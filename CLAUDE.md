@@ -360,12 +360,15 @@ message template and the injected link markup come from our own static
 sources, never from user input.
 
 **NASA FIRMS fallback for Active fires — engages automatically, EFFIS stays
-the default.** EFFIS's own active-fire detection is itself built on NASA
-FIRMS (confirmed in `docs/firms-migration-plan.md`) — when
-`watchEffisHealth`'s report shows `activeFires: "down"` (see above), `main.ts`
-switches that one layer to real FIRMS data instead of leaving broken raster
-tiles on screen, and switches back the moment `activeFires` stops being
-`"down"`. Scoped deliberately narrow: "Burnt areas" and "Past fires" have no
+the default, and a manual Auto/EFFIS/FIRMS override sits in the layers
+sheet.** EFFIS's own active-fire detection is itself built on NASA FIRMS
+(confirmed in `docs/firms-migration-plan.md`) — when `watchEffisHealth`'s
+report shows `activeFires: "down"` (see above), `main.ts` switches that one
+layer to real FIRMS data instead of leaving broken raster tiles on screen,
+and switches back once EFFIS is confirmed responsive again (see
+`wmtsAppearsResponsive` below — "the moment `activeFires` stops being
+`down`" turned out to not quite be true; keep reading). Scoped deliberately
+narrow: "Burnt areas" and "Past fires" have no
 FIRMS equivalent (FIRMS is point-hotspot data only, no burned-area/burn-scar
 product — see `docs/firms-migration-plan.md` for the full research) and are
 untouched by this regardless of their own health.
@@ -423,6 +426,62 @@ untouched by this regardless of their own health.
   working as designed. Real attribution lives in the About modal's
   `about_content_html` (see the "no AttributionControl" note below), not
   the GeoJSON source's inert `attribution` property.
+
+**A cold-start check exists alongside `watchEffisHealth`'s rolling-window
+detection, because the failure counter has a real blind spot: it needs an
+actual `error` event to count anything, and a request that just hangs
+forever — never resolving, never erroring — produces none.** In dev
+specifically, `/api/wmts` is a raw Vite proxy passthrough with no
+`AbortSignal.timeout` (unlike production's `api/wmts.ts`, which has one at
+15s), so a genuinely unresponsive EFFIS backend can hang indefinitely there
+with zero error events ever firing — confirmed live during testing, not
+just a theoretical gap. `watchWmtsActivity()` in `main.ts` sets a single
+`wmtsAppearsResponsive` flag the first time *any* `/api/wmts` resource
+timing entry appears (success or failure — just evidence the mount is
+alive), and a one-shot 5s timer (`INITIAL_LOAD_TIMEOUT_MS`) engages the
+FIRMS fallback if nothing has appeared by then, bypassing the normal
+failure-threshold logic entirely for this one cold-start decision.
+
+**That fix introduced a second bug, which is why disengaging now needs more
+than `report.activeFires !== "down"`.** The obvious first implementation —
+revert to EFFIS as soon as `watchEffisHealth` next reports `activeFires` as
+not-`"down"` — reverted the cold-start-triggered switch within moments of
+it happening, confirmed live, not just reasoned about. The reason: a
+cold-start-triggered switch has zero recorded failures by definition (that
+was the whole problem — nothing ever errored), so the very next periodic
+health recheck computes `activeFires: "ok"` — not because EFFIS recovered,
+but because nothing was ever proven broken in the first place, and "ok" is
+the default in the absence of evidence either way. The fix: track
+`firmsEngagedByColdStart` (set via `engageFirmsFallback(triggeredByColdStart)`)
+and require `wmtsAppearsResponsive` as an *additional* condition before
+disengaging, but only when that flag is set — see the comment on the
+disengage branch in `handleEffisHealthChange` for the full reasoning. A
+*normal*, failure-threshold-triggered switch doesn't get this extra
+requirement: it already started with real evidence of failure, and once no
+new failures occur for 20s the existing cooldown-based recovery (pruning
+the rolling window) is trusted as-is, unchanged from before this existed —
+tightening that path too would risk leaving FIRMS stuck engaged with no way
+back, since MapLibre stops requesting tiles entirely for a hidden
+(`visibility: "none"`) layer, so a genuinely-recovered EFFIS might never
+generate a new `/api/wmts` request to prove it if `wmtsAppearsResponsive`
+were required universally.
+
+**The manual override** (`#active-fires-source` in `index.html`, styled via
+`.segmented-sm` — a smaller variant of the existing `.segmented` control
+used for the Current/Past fires toggle) is a 3-way Auto/EFFIS/FIRMS choice,
+not a plain 2-way switch — deliberately, since a 2-way EFFIS/FIRMS toggle
+would be ambiguous about whether picking "EFFIS" while it's confirmed down
+should keep getting silently overridden back to FIRMS by the automatic
+logic. `activeFiresSourceMode` (`"auto" | "effis" | "firms"`) is checked at
+the top of `handleEffisHealthChange` and inside `watchWmtsActivity`'s
+timeout — anything other than `"auto"` short-circuits both, so a manual pin
+is never overridden by either automatic path. Picking `"auto"` re-syncs
+immediately against `currentActiveFiresHealth` (the latest known
+per-group health) rather than waiting for the next `watchEffisHealth`
+change event, so the control's effect is visible right away. Disabled
+(`updateActiveFiresSourceControlState()`, called from `applyModeVisibility`)
+whenever "Active fires" itself is off or the app is in "Past fires" mode,
+since the choice is meaningless in either case.
 
 **Country borders are a separate GISCO overlay, not part of the basemap.**
 `addCountryBorders()` in `src/map.ts` fetches Eurostat GISCO's
@@ -497,7 +556,8 @@ update them on its own until the pre-scripts rerun.
   active-fires/burnt-areas checkboxes, year `<select>`, click-to-popup
   behavior, the EFFIS health warning banner (`handleEffisHealthChange`),
   and the NASA FIRMS fallback orchestration (`engageFirmsFallback`/
-  `disengageFirmsFallback`/`refreshFirmsData`) together.
+  `disengageFirmsFallback`/`refreshFirmsData`, the `watchWmtsActivity`
+  cold-start check, and the manual Auto/EFFIS/FIRMS override) together.
 - `index.html` / `src/style.css` — toolbar markup/styling. **No
   `AttributionControl`** — `map.ts` constructs the `Map` with
   `attributionControl: false`, so despite each source's `attribution`
