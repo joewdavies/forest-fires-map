@@ -41,6 +41,8 @@ import {
   getCountry,
   getFireDateIso,
   getProvince,
+  tileTemplate,
+  type WmtsLayerKind,
 } from "./effis";
 import {
   watchEffisHealth,
@@ -503,42 +505,45 @@ activeFiresSourceFirmsBtn.addEventListener("click", () => {
   if (activeFiresProvider === "effis") engageFirmsFallback();
 });
 
-// Tracks whether MapLibre has successfully loaded content from any EFFIS
-// WMTS source. A completed HTTP error is deliberately not enough.
-let wmtsSuccessfulResponseReceived = false;
+const WMTS_PROBE_LAYERS: readonly WmtsLayerKind[] = [
+  "burnt-areas-modis",
+  "burnt-areas-nrt",
+  "active-fires-modis",
+  "active-fires-viirs",
+  "active-fires-s3",
+];
 
-// The one-time initial decision: if no successful EFFIS tile has loaded
-// within INITIAL_LOAD_TIMEOUT_MS, switch to FIRMS and remove the WMTS
-// sources so MapLibre cannot keep retrying them.
+// Probe one representative Spain tile from every current-fire product.
+// Failed responses keep the five-second observation window open; the first
+// HTTP-successful response proves WMTS is available and cancels the rest.
 function watchWmtsActivity(): void {
-  const wmtsSourceIds = new Set<string>([
-    ...ACTIVE_FIRES_LAYER_IDS,
-    ...BURNT_AREAS_LAYER_IDS,
-    PAST_FIRES_LAYER_ID,
-  ]);
-  const onSourceData = (event: {
-    sourceId?: string;
-    sourceDataType?: string;
-  }) => {
-    if (
-      event.sourceId &&
-      wmtsSourceIds.has(event.sourceId) &&
-      event.sourceDataType === "content"
-    ) {
-      wmtsSuccessfulResponseReceived = true;
-    }
-  };
-  map.on("sourcedata", onSourceData);
+  const controller = new AbortController();
+  let settled = false;
 
-  window.setTimeout(() => {
-    map.off("sourcedata", onSourceData);
-    if (
-      !wmtsSuccessfulResponseReceived &&
-      activeFiresProvider === "effis"
-    ) {
-      void engageFirmsFallback();
-    }
+  const timeoutId = window.setTimeout(() => {
+    if (settled) return;
+    settled = true;
+    controller.abort();
+    if (activeFiresProvider === "effis") void engageFirmsFallback();
   }, INITIAL_LOAD_TIMEOUT_MS);
+
+  for (const kind of WMTS_PROBE_LAYERS) {
+    const url = tileTemplate(kind)
+      .replace("{z}", "5")
+      .replace("{x}", "15")
+      .replace("{y}", "11");
+    fetch(url, { signal: controller.signal })
+      .then((response) => {
+        if (settled || !response.ok) return;
+        settled = true;
+        window.clearTimeout(timeoutId);
+        controller.abort();
+      })
+      .catch(() => {
+        // A failed probe is expected during an outage. Keep waiting for
+        // another layer to succeed or for the shared five-second deadline.
+      });
+  }
 }
 
 function startMeasurement(): void {

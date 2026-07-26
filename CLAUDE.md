@@ -449,11 +449,12 @@ never resolving, never erroring — produces none.** In dev specifically,
 (unlike production's `api/wmts.ts`, which has one at 15s), so a genuinely
 unresponsive EFFIS backend can hang indefinitely there with zero error
 events ever firing — confirmed live during testing, not just a theoretical
-gap. `watchWmtsActivity()` in `main.ts` waits for MapLibre to emit a
-successful raster `sourcedata` content event from any EFFIS WMTS source; an
-HTTP 503/504 does not satisfy it. A one-shot 5s timer
-(`INITIAL_LOAD_TIMEOUT_MS`) engages the FIRMS fallback if no successful tile
-has loaded by then and the provider is still EFFIS. Engaging FIRMS removes
+gap. `watchWmtsActivity()` in `main.ts` makes one representative tile probe
+for each of the five current-fire WMTS products and accepts only an HTTP
+successful response; a MapLibre source lifecycle event or HTTP 503/504 does
+not satisfy it. The first successful probe cancels the others. A one-shot
+5s timer (`INITIAL_LOAD_TIMEOUT_MS`) engages the FIRMS fallback if no probe
+has succeeded by then and the provider is still EFFIS. Engaging FIRMS removes
 all EFFIS WMTS layers and sources, rather than merely hiding them, so
 MapLibre cannot retain or retry WMTS tile work in the background. This means
 burnt-area and historical WMTS rasters are unavailable in FIRMS mode (FIRMS
