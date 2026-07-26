@@ -214,6 +214,7 @@ export function setBasemap(
   kind: BasemapKind,
   placeLabelsEnabled: boolean,
   language: Language,
+  effisWmtsEnabled = true,
 ): Promise<void> {
   return styleForBasemap(kind, language).then(
     (style) =>
@@ -231,9 +232,7 @@ export function setBasemap(
             map.dragRotate.disable();
           }
           addCountryBorders(map, kind);
-          addBurntAreasLayers(map);
-          addActiveFiresLayers(map);
-          addPastFiresLayer(map);
+          if (effisWmtsEnabled) addEffisWmtsLayers(map);
           await setPlaceLabelsVisible(map, placeLabelsEnabled, language);
           resolve();
         };
@@ -534,12 +533,34 @@ function addPastFiresLayer(map: Map): void {
   );
 }
 
-/** Repoints the past-fires raster layer at a different year's tiles —
- * called whenever the year `<select>` changes, and once right after this
- * layer is (re-)created, since it always starts on a hardcoded default
- * year (see addPastFiresLayer). */
+/** Restores the complete EFFIS WMTS stack after switching back from FIRMS. */
+export function addEffisWmtsLayers(map: Map): void {
+  addBurntAreasLayers(map);
+  addActiveFiresLayers(map);
+  addPastFiresLayer(map);
+}
+
+/** Removing the layers alone is insufficient: deleting the raster sources
+ * also cancels MapLibre's outstanding/retry tile pipeline. */
+export function removeEffisWmtsLayers(map: Map): void {
+  const ids = [
+    ...ACTIVE_FIRES_LAYER_IDS,
+    ...BURNT_AREAS_LAYER_IDS,
+    PAST_FIRES_LAYER_ID,
+  ];
+  for (const id of ids) {
+    if (map.getLayer(id)) map.removeLayer(id);
+  }
+  for (const id of ids) {
+    if (map.getSource(id)) map.removeSource(id);
+  }
+}
+
+/** Repoints the past-fires raster layer at a different year's tiles.
+ * Safely does nothing while FIRMS mode has removed the WMTS stack. */
 export function setPastFiresYear(map: Map, year: number): void {
-  (map.getSource(PAST_FIRES_LAYER_ID) as RasterTileSource).setTiles([
-    pastFiresTileTemplate(year),
-  ]);
+  const source = map.getSource(PAST_FIRES_LAYER_ID) as
+    | RasterTileSource
+    | undefined;
+  source?.setTiles([pastFiresTileTemplate(year)]);
 }

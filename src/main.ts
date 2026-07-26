@@ -21,7 +21,9 @@ import {
 } from "maplibre-gl";
 import type { FeatureCollection } from "geojson";
 import {
+  addEffisWmtsLayers,
   createMap,
+  removeEffisWmtsLayers,
   setBasemap,
   setPastFiresYear,
   setPlaceLabelsLanguage,
@@ -446,7 +448,8 @@ function refreshEffisWarningText(): void {
 async function engageFirmsFallback(): Promise<void> {
   activeFiresProvider = "firms";
   updateActiveFiresSourceUi();
-  applyModeVisibility(); // hide the broken EFFIS tiles immediately, before awaiting the fetch below
+  removeEffisWmtsLayers(map);
+  applyModeVisibility();
   updateLegend();
   await refreshFirmsData();
   firmsRefreshTimer = window.setInterval(refreshFirmsData, FIRMS_REFRESH_INTERVAL_MS);
@@ -458,7 +461,11 @@ function disengageFirmsFallback(): void {
   window.clearInterval(firmsRefreshTimer);
   firmsRefreshTimer = undefined;
   ++firmsRequestId; // invalidate any in-flight refresh so a late response can't overwrite state after we've moved on
-  (map.getSource(FIRMS_SOURCE_ID) as GeoJSONSource | undefined)?.setData(emptyCollection());
+  (map.getSource(FIRMS_SOURCE_ID) as GeoJSONSource | undefined)?.setData(
+    emptyCollection(),
+  );
+  addEffisWmtsLayers(map);
+  setPastFiresYear(map, Number(yearSelect.value));
   applyModeVisibility();
   updateLegend();
 }
@@ -491,35 +498,40 @@ activeFiresSourceFirmsBtn.addEventListener("click", () => {
   if (activeFiresProvider === "effis") engageFirmsFallback();
 });
 
-// Tracks whether /api/wmts has produced *any* completed response yet
-// (success or failure — just evidence the mount is alive at all), scoped at
-// the same mount granularity effisHealth.ts's slow-response tracking
-// already uses (see its "Known unknowns"-referenced reasoning in
-// CLAUDE.md) rather than trying to isolate active-fires specifically — if
-// the mount is silent, active fires is silent too. Only read once, by the
-// cold-start timeout below.
-let wmtsAppearsResponsive = false;
+// Tracks whether MapLibre has successfully loaded content from any EFFIS
+// WMTS source. A completed HTTP error is deliberately not enough.
+let wmtsSuccessfulResponseReceived = false;
 
-// The one-time initial decision: if nothing at all has come back from
-// EFFIS's WMTS mount within INITIAL_LOAD_TIMEOUT_MS of the page loading,
-// switch Active fires to FIRMS. Runs exactly once, on a one-shot timer, at
-// startup — not on every subsequent health check — so a flapping EFFIS
-// backend later in the session can't silently flip the active layer back
-// and forth; after this fires (or doesn't), the provider only changes via
-// the manual EFFIS/FIRMS toggle above.
+// The one-time initial decision: if no successful EFFIS tile has loaded
+// within INITIAL_LOAD_TIMEOUT_MS, switch to FIRMS and remove the WMTS
+// sources so MapLibre cannot keep retrying them.
 function watchWmtsActivity(): void {
-  const observer = new PerformanceObserver((list) => {
-    for (const entry of list.getEntries()) {
-      if (/\/api\/wmts(\?|$)/.test(entry.name)) {
-        wmtsAppearsResponsive = true;
-      }
+  const wmtsSourceIds = new Set<string>([
+    ...ACTIVE_FIRES_LAYER_IDS,
+    ...BURNT_AREAS_LAYER_IDS,
+    PAST_FIRES_LAYER_ID,
+  ]);
+  const onSourceData = (event: {
+    sourceId?: string;
+    sourceDataType?: string;
+  }) => {
+    if (
+      event.sourceId &&
+      wmtsSourceIds.has(event.sourceId) &&
+      event.sourceDataType === "content"
+    ) {
+      wmtsSuccessfulResponseReceived = true;
     }
-  });
-  observer.observe({ type: "resource", buffered: true });
+  };
+  map.on("sourcedata", onSourceData);
 
   window.setTimeout(() => {
-    if (!wmtsAppearsResponsive && activeFiresProvider === "effis") {
-      engageFirmsFallback();
+    map.off("sourcedata", onSourceData);
+    if (
+      !wmtsSuccessfulResponseReceived &&
+      activeFiresProvider === "effis"
+    ) {
+      void engageFirmsFallback();
     }
   }, INITIAL_LOAD_TIMEOUT_MS);
 }
@@ -851,7 +863,13 @@ async function handleBasemapChange(kind: BasemapKind) {
   setMapLoading(true);
   setStatus(t("loading_style"));
   try {
-    await setBasemap(map, kind, placeLabelsCheckbox.checked, getLanguage());
+    await setBasemap(
+      map,
+      kind,
+      placeLabelsCheckbox.checked,
+      getLanguage(),
+      activeFiresProvider === "effis",
+    );
   } catch (err) {
     setMapLoading(false);
     console.warn("Failed to switch basemap:", err);
@@ -912,22 +930,28 @@ function setMode(next: Mode) {
 function applyModeVisibility() {
   const burntAreasVisible = mode === "current" && burntAreasCheckbox.checked;
   for (const id of BURNT_AREAS_LAYER_IDS) {
-    map.setLayoutProperty(
-      id,
-      "visibility",
-      burntAreasVisible ? "visible" : "none",
-    );
+    if (map.getLayer(id)) {
+      map.setLayoutProperty(
+        id,
+        "visibility",
+        burntAreasVisible ? "visible" : "none",
+      );
+    }
   }
 
   const activeFiresVisible = mode === "current" && activeFiresCheckbox.checked;
-  const showEffisActiveFires = activeFiresVisible && activeFiresProvider === "effis";
-  const showFirmsActiveFires = activeFiresVisible && activeFiresProvider === "firms";
+  const showEffisActiveFires =
+    activeFiresVisible && activeFiresProvider === "effis";
+  const showFirmsActiveFires =
+    activeFiresVisible && activeFiresProvider === "firms";
   for (const id of ACTIVE_FIRES_LAYER_IDS) {
-    map.setLayoutProperty(
-      id,
-      "visibility",
-      showEffisActiveFires ? "visible" : "none",
-    );
+    if (map.getLayer(id)) {
+      map.setLayoutProperty(
+        id,
+        "visibility",
+        showEffisActiveFires ? "visible" : "none",
+      );
+    }
   }
   map.setLayoutProperty(
     FIRMS_LAYER_ID,
@@ -947,11 +971,13 @@ function applyModeVisibility() {
 
   const pastRasterVisible =
     mode === "past" && Number(yearSelect.value) >= EARLIEST_WMTS_YEAR;
-  map.setLayoutProperty(
-    PAST_FIRES_LAYER_ID,
-    "visibility",
-    pastRasterVisible ? "visible" : "none",
-  );
+  if (map.getLayer(PAST_FIRES_LAYER_ID)) {
+    map.setLayoutProperty(
+      PAST_FIRES_LAYER_ID,
+      "visibility",
+      pastRasterVisible ? "visible" : "none",
+    );
+  }
 }
 
 function emptyCollection(): FeatureCollection {
