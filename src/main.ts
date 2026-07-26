@@ -815,6 +815,7 @@ function addFirmsActiveFiresLayer(map: MaplibreMap): void {
     paint: {
       "circle-radius": firmsPointRadiusExpression(),
       "circle-color": recencyColorExpression(),
+      "circle-opacity": 0.9,
     },
   });
 
@@ -833,6 +834,7 @@ function addFirmsActiveFiresLayer(map: MaplibreMap): void {
     },
     paint: {
       "icon-color": recencyColorExpression(),
+      "icon-opacity": 0.9,
     },
   });
 }
