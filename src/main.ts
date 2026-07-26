@@ -1506,9 +1506,11 @@ function updateLegend() {
     }
 
     if (isCurrentMode) {
-      burntAreasItem.style.display = burntAreasCheckbox.checked
-        ? "flex"
-        : "none";
+      const burntAreasAvailable = BURNT_AREAS_LAYER_IDS.some((id) =>
+        Boolean(map.getLayer(id)),
+      );
+      burntAreasItem.style.display =
+        burntAreasCheckbox.checked && burntAreasAvailable ? "flex" : "none";
       const labelEl = document.getElementById("legend-title-burnt-areas");
       if (labelEl) {
         labelEl.setAttribute("data-i18n", "burnt_areas");

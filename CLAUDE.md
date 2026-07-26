@@ -475,9 +475,12 @@ has succeeded by then and the provider is still EFFIS. Engaging FIRMS removes
 all EFFIS WMTS layers and sources, rather than merely hiding them, so
 MapLibre cannot retain or retry WMTS tile work in the background. This means
 burnt-area and historical WMTS rasters are unavailable in FIRMS mode (FIRMS
-has no equivalent); manually selecting EFFIS recreates the complete WMTS
-stack. Basemap changes also skip recreating that stack while FIRMS remains
-selected. During the automatic handoff, `#provider-fallback-status` shows a
+has no equivalent); `updateLegend()` therefore only shows the current
+Burnt-areas legend entry when at least one burnt-area map layer actually
+exists, avoiding a legend for data that was removed during fallback.
+Manually selecting EFFIS recreates the complete WMTS stack. Basemap changes
+also skip recreating that stack while FIRMS remains selected. During the
+automatic handoff, `#provider-fallback-status` shows a
 localized, non-blocking popup explaining that EFFIS is down and NASA FIRMS
 is being queried; it is hidden in a `finally` block when that request
 settles. That popup has its own inline spinner, so `setMapLoading()` suppresses
