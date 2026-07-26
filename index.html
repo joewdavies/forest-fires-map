@@ -158,6 +158,19 @@
           class="map-loading-indicator active"
           aria-hidden="true"
         ></div>
+        <div
+          id="provider-fallback-status"
+          class="provider-fallback-status"
+          role="status"
+          aria-live="polite"
+          hidden
+        >
+          <span class="provider-fallback-spinner" aria-hidden="true"></span>
+          <span data-i18n="provider_fallback_status"
+            >EFFIS servers are down. Attempting to retrieve data from an
+            alternative source (NASA FIRMS)…</span
+          >
+        </div>
       </div>
 
       <div id="about-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="about-title" hidden inert>

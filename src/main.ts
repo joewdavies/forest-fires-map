@@ -165,6 +165,9 @@ const searchBtn = document.getElementById("search-btn") as HTMLButtonElement;
 const mapLoadingIndicator = document.getElementById(
   "map-loading-indicator",
 ) as HTMLElement;
+const providerFallbackStatus = document.getElementById(
+  "provider-fallback-status",
+) as HTMLElement;
 const searchResults = document.getElementById(
   "search-results",
 ) as HTMLUListElement;
@@ -452,17 +455,22 @@ function refreshEffisWarningText(): void {
 // fallback at all — "Burnt areas" and "Past fires" have no FIRMS equivalent
 // and are untouched by this.
 
-async function engageFirmsFallback(): Promise<void> {
+async function engageFirmsFallback(showStartupStatus = false): Promise<void> {
   activeFiresProvider = "firms";
   updateActiveFiresSourceUi();
   removeEffisWmtsLayers(map);
   applyModeVisibility();
   updateLegend();
-  await refreshFirmsData();
-  firmsRefreshTimer = window.setInterval(
-    refreshFirmsData,
-    FIRMS_REFRESH_INTERVAL_MS,
-  );
+  if (showStartupStatus) providerFallbackStatus.hidden = false;
+  try {
+    await refreshFirmsData();
+    firmsRefreshTimer = window.setInterval(
+      refreshFirmsData,
+      FIRMS_REFRESH_INTERVAL_MS,
+    );
+  } finally {
+    providerFallbackStatus.hidden = true;
+  }
 }
 
 function disengageFirmsFallback(): void {
@@ -527,7 +535,7 @@ function watchWmtsActivity(): void {
     if (settled) return;
     settled = true;
     controller.abort();
-    if (activeFiresProvider === "effis") void engageFirmsFallback();
+    if (activeFiresProvider === "effis") void engageFirmsFallback(true);
   }, INITIAL_LOAD_TIMEOUT_MS);
 
   for (const kind of WMTS_PROBE_LAYERS) {

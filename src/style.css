@@ -817,6 +817,54 @@ body {
   }
 }
 
+.provider-fallback-status {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: min(420px, calc(100% - 2rem));
+  padding: 0.9rem 1rem;
+  color: #fff;
+  background: rgba(27, 27, 27, 0.96);
+  border: 1px solid #444;
+  border-left: 3px solid #e25822;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  font-size: 0.9rem;
+  line-height: 1.4;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
+.provider-fallback-status[hidden] {
+  display: none;
+}
+
+.provider-fallback-spinner {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-top-color: #e25822;
+  border-radius: 50%;
+  animation: provider-fallback-spin 0.75s linear infinite;
+}
+
+@keyframes provider-fallback-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .provider-fallback-spinner {
+    animation-duration: 1.5s;
+  }
+}
+
 .search-results {
   position: absolute;
   top: calc(100% + 4px);

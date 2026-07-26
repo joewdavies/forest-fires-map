@@ -70,6 +70,8 @@ const translations: Record<Language, Record<string, string>> = {
     active_fires_source_label: "Data source",
     active_fires_source_effis: "EFFIS (EU)",
     active_fires_source_firms: "FIRMS (NASA)",
+    provider_fallback_status:
+      "EFFIS servers are down. Attempting to retrieve data from an alternative source (NASA FIRMS)…",
     effis_status_slow:
       "{effisLinkOpen}EFFIS{effisLinkClose} is responding slowly right now — some fire data may take longer to load.",
     effis_status_down:
@@ -145,6 +147,8 @@ const translations: Record<Language, Record<string, string>> = {
     active_fires_source_label: "Fuente de datos",
     active_fires_source_effis: "EFFIS",
     active_fires_source_firms: "FIRMS",
+    provider_fallback_status:
+      "Los servidores de EFFIS no están disponibles. Intentando obtener datos de una fuente alternativa (NASA FIRMS)…",
     effis_status_slow:
       "{effisLinkOpen}EFFIS{effisLinkClose} está respondiendo lentamente en este momento — algunos datos de incendios pueden tardar más en cargarse.",
     effis_status_down:
@@ -221,6 +225,8 @@ const translations: Record<Language, Record<string, string>> = {
     active_fires_source_label: "Datenquelle",
     active_fires_source_effis: "EFFIS",
     active_fires_source_firms: "FIRMS",
+    provider_fallback_status:
+      "Die EFFIS-Server sind nicht erreichbar. Daten werden von einer alternativen Quelle (NASA FIRMS) abgerufen…",
     effis_status_slow:
       "{effisLinkOpen}EFFIS{effisLinkClose} reagiert derzeit langsam — einige Brandinformationen können länger zum Laden benötigen.",
     effis_status_down:
@@ -297,6 +303,8 @@ const translations: Record<Language, Record<string, string>> = {
     active_fires_source_label: "Source de données",
     active_fires_source_effis: "EFFIS",
     active_fires_source_firms: "FIRMS",
+    provider_fallback_status:
+      "Les serveurs EFFIS sont indisponibles. Tentative de récupération des données depuis une source alternative (NASA FIRMS)…",
     effis_status_slow:
       "{effisLinkOpen}EFFIS{effisLinkClose} répond actuellement lentement — certaines données sur les incendies peuvent mettre plus de temps à se charger.",
     effis_status_down:

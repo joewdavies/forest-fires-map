@@ -462,7 +462,10 @@ MapLibre cannot retain or retry WMTS tile work in the background. This means
 burnt-area and historical WMTS rasters are unavailable in FIRMS mode (FIRMS
 has no equivalent); manually selecting EFFIS recreates the complete WMTS
 stack. Basemap changes also skip recreating that stack while FIRMS remains
-selected. This timer only ever runs
+selected. During the automatic handoff, `#provider-fallback-status` shows a
+localized, non-blocking popup explaining that EFFIS is down and NASA FIRMS
+is being queried; it is hidden in a `finally` block when that request
+settles. This timer only ever runs
 once, at page load, and there is no automatic path back to EFFIS — an
 earlier version tried to auto-revert once `watchEffisHealth` next reported
 `activeFires` as not-`"down"`, but that reverted the cold-start-triggered
