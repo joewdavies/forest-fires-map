@@ -438,7 +438,9 @@ full research) and are untouched by this regardless of their own health.
   recency on the left and sensor shapes on the right under localized "Age"
   and "Satellite" headings; burnt areas flow onto the next row instead of
   becoming a third horizontal column. Desktop retains the original compact,
-  vertically stacked legend.
+  vertically stacked legend. The mobile card also removes the redundant
+  "Legend" heading from the layout and positions its close button directly
+  in the panel's top-right corner, eliminating the header row's height.
 - Query covers all of Europe (`EUROPE_BBOX` in `firms.ts`, matching the
   bbox FIRMS's own `kml_fire_footprints` endpoint uses for its predefined
   "europe" region), not just `map.ts`'s Spain-scoped `DEFAULT_BOUNDS` — a

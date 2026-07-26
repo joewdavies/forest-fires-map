@@ -1324,6 +1324,30 @@ body {
     transform: translateY(0);
   }
 
+  .legend-header {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.75rem;
+    z-index: 1;
+    padding: 0;
+    border: 0;
+  }
+
+  .legend-header h3 {
+    display: none;
+  }
+
+  .legend-close {
+    display: grid;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    place-items: center;
+    border-radius: 50%;
+    background: #1b1b1b;
+    font-size: 1.25rem;
+  }
+
   .legend-body {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
