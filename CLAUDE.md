@@ -272,6 +272,59 @@ await is not available in the configured target environment." es2022 is
 the first target with it. `npm run dev` was never affected (dev mode uses
 native ESM in the browser directly, no target-restricted transpilation).
 
+**EFFIS health warning: closes the "no error UI for raster tiles" gap, on
+purpose, without per-tile precision.** Both current-fires WMTS overlays and
+the past-fires WMTS overlay are plain MapLibre raster sources — no fetch/
+parsing code of ours is in the loop (see the data-flow bullets above), so
+until `src/effisHealth.ts` existed, a failing tile just silently didn't
+render, with zero visibility to the user or to us. `watchEffisHealth(map,
+onChange)` fixes that at the *aggregate* level (not per-tile — see "Known
+unknowns" below for why per-tile still isn't diagnosable) via two
+independent, rolling-window signals, combined into one `"ok" | "slow" |
+"down"` health value:
+- **Tile failures** — `map.on('error', ...)`, filtered to our own raster
+  source ids (`TRACKED_SOURCE_IDS`: `BURNT_AREAS_LAYER_IDS` +
+  `ACTIVE_FIRES_LAYER_IDS` + `PAST_FIRES_LAYER_ID`) so basemap/border tile
+  failures don't count. This relies on an undocumented-but-real runtime
+  behavior: MapLibre's public types don't declare `sourceId` on
+  `ErrorEvent`, but every tile source forwards its own 'error' events up
+  through the style to the map with `sourceId` mixed in regardless
+  (confirmed by reading maplibre-gl's bundled source, not assumed) — hence
+  the local type cast in `effisHealth.ts`. MapLibre already filters out 404s
+  before firing (an expected "no tile here" response), so anything that
+  reaches this handler is a genuine failure (500/504/network error). 4+
+  failures within 20s (not a single one — see "Known unknowns" on why a
+  handful of 500s is routine) escalates to `"down"`.
+- **Slow proxy responses** — a `PerformanceObserver` on `resource` timing
+  entries, filtered to URLs under `/api/wmts` and `/api/effis`. This catches
+  degradation *earlier* than tile failures do, since it counts requests that
+  are merely slow (≥4s), including ones that eventually succeed — both
+  proxies already hard-timeout their upstream fetch at 15s (see
+  `REQUEST_TIMEOUT_MS` in `api/effis.ts`/`api/wmts.ts`), so this threshold
+  sits well under that ceiling. 3+ slow responses within 30s escalates to
+  `"slow"` (unless already `"down"`). The observer calls
+  `performance.clearResourceTimings()` after each batch — the browser's
+  resource-timing buffer silently *stops recording new entries* once full
+  (default cap 250, shared with every other same-origin request the page
+  makes), which would otherwise make this go quiet after the first few
+  minutes of a session.
+
+Both signals use rolling windows (pruned on every check, plus a 5s recheck
+interval to catch pruning-driven recovery even with no new events), so
+health genuinely recovers once EFFIS does — no page reload needed. `main.ts`
+renders the result as a dismissible banner (`#effis-warning`, a normal flex
+child between the toolbar and the map, not an absolutely-positioned overlay
+— deliberately, so it doesn't need to fight the many *other* floating panels
+for z-index). Dismissing suppresses that exact level (`dismissedEffisHealth`
+in `main.ts`) without suppressing forever: a later escalation (e.g.
+`"slow"` → `"down"`) or a recovery-then-relapse re-arms it, so it can warn
+again without nagging on every additional failure at the same severity.
+Verified 2026-07-26 by both synthetic `map.fire('error', ...)` injection
+(confirms the threshold/dismiss/re-arm logic deterministically) and,
+unplanned but useful, a genuinely live EFFIS outage at the time of testing
+(confirms the real event actually reaches the watcher end to end — see
+"Known unknowns" below).
+
 **Country borders are a separate GISCO overlay, not part of the basemap.**
 `addCountryBorders()` in `src/map.ts` fetches Eurostat GISCO's
 `CNTR_BN_20M_2024_4326` topojson (country borders + coastlines as
@@ -333,9 +386,13 @@ update them on its own until the pre-scripts rerun.
   (past fires, 2016+), the WFS pipeline (`fetchHistoricalFires`), and
   property accessors.
 - `src/borders.ts` — fetches + converts the GISCO country-borders topojson.
+- `src/effisHealth.ts` — `watchEffisHealth()`, the aggregate-level "EFFIS
+  is slow/down" detector described above (tile-failure + slow-proxy-response
+  signals). Has no UI of its own; `main.ts` renders its output.
 - `src/main.ts` — wires the map, the current/past mode toggle, the
-  active-fires/burnt-areas checkboxes, year `<select>`, and click-to-popup
-  behavior together.
+  active-fires/burnt-areas checkboxes, year `<select>`, click-to-popup
+  behavior, and the EFFIS health warning banner (`handleEffisHealthChange`)
+  together.
 - `index.html` / `src/style.css` — toolbar markup/styling. No custom
   attribution footer — EFFIS and GISCO attribution are set via each
   source's `attribution` property (see `map.ts`) and surface through
@@ -360,11 +417,26 @@ reliable than WMS ever was for current fires, is not 100% solid (a handful
 of tiles 500'd during live testing on 2026-07-25 even while most of the
 same layer's tiles succeeded). Expect occasional gaps in tile coverage
 rather than a hard error, since a single failed raster tile just doesn't
-render (no error UI, matching how the basemap's own raster layers already
-behave). If current fires look sparse, that may just be an accurate
+render on its own (no per-tile error UI, matching how the basemap's own
+raster layers already behave — see "EFFIS health warning" above for the
+*aggregate*-level warning that does now exist). If current fires look
+sparse without the health banner showing, that may just be an accurate
 reflection of the fire situation rather than a loading failure — there's
-no easy way from the client side to distinguish "no fires here" from "this
-tile failed to load" for a raster overlay.
+still no way from the client side to distinguish "no fires at this one
+tile" from "this one tile failed to load" (the health banner is deliberately
+threshold-based, not per-tile, precisely because a single failure like this
+is routine and not worth surfacing on its own).
+
+This same real-world strain is what both validated and complicated testing
+the EFFIS health warning above: EFFIS's `/effis` (WFS/legend) mount was
+genuinely returning `503 Service Temporarily Unavailable` from its own AWS
+load balancer while this was being built (2026-07-26), confirmed via a
+direct `curl` (fast, ~0.2s, real ELB response — not a hang), while
+`/effist/wmts` — a *different* upstream mount, see the WFS/WMS/WMTS note
+above — stayed up but slow (~15-25s for a single tile through the dev
+proxy). That inconsistency between the two mounts is exactly why the health
+watcher treats them as two independent signals (tile failures vs. slow
+responses) rather than one.
 
 **WMTS's per-year `modis.ba.<year>` layers are confirmed working for "Past
 fires" (2016+)** — see "Past fires: WFS *and* WMTS, on purpose" above for

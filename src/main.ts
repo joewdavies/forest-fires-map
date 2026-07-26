@@ -37,6 +37,7 @@ import {
   getFireDateIso,
   getProvince,
 } from "./effis";
+import { watchEffisHealth, type EffisHealth } from "./effisHealth";
 
 const FIRE_SOURCE_ID = "fires";
 const FIRE_FILL_LAYER = "fires-fill";
@@ -90,6 +91,14 @@ const measureCloseBtn = document.getElementById(
   "measure-close",
 ) as HTMLButtonElement;
 
+const effisWarning = document.getElementById("effis-warning") as HTMLElement;
+const effisWarningText = document.getElementById(
+  "effis-warning-text",
+) as HTMLElement;
+const effisWarningClose = document.getElementById(
+  "effis-warning-close",
+) as HTMLButtonElement;
+
 const searchContainer = document.getElementById(
   "search-container",
 ) as HTMLElement;
@@ -141,6 +150,8 @@ let measurementActive = false;
 let measurementStart: LngLat | null = null;
 let measurementEnd: LngLat | null = null;
 let measurementPreview: LngLat | null = null;
+let currentEffisHealth: EffisHealth = "ok";
+let dismissedEffisHealth: EffisHealth | null = null;
 
 populateYearSelect();
 
@@ -183,6 +194,7 @@ for (const option of basemapOptions) {
 map.on("load", () => {
   addFireLayer(map);
   addMeasurementLayers();
+  watchEffisHealth(map, handleEffisHealthChange);
 
   map.on("mouseenter", FIRE_FILL_LAYER, () => {
     if (!measurementActive) map.getCanvas().style.cursor = "pointer";
@@ -291,6 +303,34 @@ function updateCompass() {
   } else {
     compassBtn.classList.remove("visible");
   }
+}
+
+// --- EFFIS health warning ---------------------------------------------
+
+function handleEffisHealthChange(health: EffisHealth): void {
+  currentEffisHealth = health;
+  if (health === "ok") {
+    dismissedEffisHealth = null;
+    effisWarning.hidden = true;
+    return;
+  }
+  if (health === dismissedEffisHealth) return;
+  effisWarningText.textContent = t(
+    health === "down" ? "effis_status_down" : "effis_status_slow",
+  );
+  effisWarning.hidden = false;
+}
+
+effisWarningClose.addEventListener("click", () => {
+  dismissedEffisHealth = currentEffisHealth;
+  effisWarning.hidden = true;
+});
+
+function refreshEffisWarningText(): void {
+  if (effisWarning.hidden) return;
+  effisWarningText.textContent = t(
+    currentEffisHealth === "down" ? "effis_status_down" : "effis_status_slow",
+  );
 }
 
 function startMeasurement(): void {
@@ -825,6 +865,7 @@ for (const option of langOptions) {
       setLanguage(lang);
       updateActiveLanguageOption();
       refreshMeasurementTooltip();
+      refreshEffisWarningText();
       setPlaceLabelsLanguage(map, lang);
       loadFires();
       updateLegend();

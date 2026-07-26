@@ -59,7 +59,9 @@ const translations: Record<Language, Record<string, string>> = {
     legend_12_to_24_hours: "12–24 h",
     legend_last_1_day: "Last day",
     legend_last_7_days: "Last 7 days",
-    legend_borders: "Country Borders"
+    legend_borders: "Country Borders",
+    effis_status_slow: "EFFIS is responding slowly right now — some fire data may take longer to load.",
+    effis_status_down: "EFFIS appears to be down or unreachable right now — fire data may be missing or outdated."
   },
   es: {
     app_title: "Mapa de incendios forestales",
@@ -119,7 +121,9 @@ const translations: Record<Language, Record<string, string>> = {
     legend_12_to_24_hours: "12–24 h",
     legend_last_1_day: "Último día",
     legend_last_7_days: "Últimos 7 días",
-    legend_borders: "Límites nacionales"
+    legend_borders: "Límites nacionales",
+    effis_status_slow: "EFFIS está respondiendo lentamente en este momento — algunos datos de incendios pueden tardar más en cargarse.",
+    effis_status_down: "EFFIS parece estar caído o inaccesible en este momento — los datos de incendios pueden faltar o estar desactualizados."
   },
   de: {
     app_title: "Waldbrandkarte",
@@ -179,7 +183,9 @@ const translations: Record<Language, Record<string, string>> = {
     legend_12_to_24_hours: "12–24 Std.",
     legend_last_1_day: "Letzter Tag",
     legend_last_7_days: "Letzte 7 Tage",
-    legend_borders: "Landesgrenzen"
+    legend_borders: "Landesgrenzen",
+    effis_status_slow: "EFFIS reagiert derzeit langsam — einige Brandinformationen können länger zum Laden benötigen.",
+    effis_status_down: "EFFIS scheint derzeit nicht erreichbar zu sein — Brandinformationen können fehlen oder veraltet sein."
   },
   fr: {
     app_title: "Carte des incendies de forêt",
@@ -239,7 +245,9 @@ const translations: Record<Language, Record<string, string>> = {
     legend_12_to_24_hours: "12–24 h",
     legend_last_1_day: "Dernier jour",
     legend_last_7_days: "7 derniers jours",
-    legend_borders: "Frontières nationales"
+    legend_borders: "Frontières nationales",
+    effis_status_slow: "EFFIS répond actuellement lentement — certaines données sur les incendies peuvent mettre plus de temps à se charger.",
+    effis_status_down: "EFFIS semble actuellement hors service ou inaccessible — les données sur les incendies peuvent être manquantes ou obsolètes."
   },
 };
 
