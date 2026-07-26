@@ -12,6 +12,7 @@ import legendConfig from "./legend-config.json";
 import config from "../config.json";
 import {
   Popup,
+  type ExpressionSpecification,
   type GeoJSONSource,
   type LngLat,
   type Map as MaplibreMap,
@@ -39,7 +40,12 @@ import {
   getFireDateIso,
   getProvince,
 } from "./effis";
-import { watchEffisHealth, type EffisHealth } from "./effisHealth";
+import {
+  watchEffisHealth,
+  type EffisHealth,
+  type EffisHealthReport,
+} from "./effisHealth";
+import { fetchActiveFiresFallback, EUROPE_BBOX, FIRMS_ATTRIBUTION } from "./firms";
 
 inject();
 injectSpeedInsights();
@@ -51,6 +57,9 @@ const MEASURE_SOURCE_ID = "distance-measurement";
 const MEASURE_LINE_LAYER_ID = "distance-measurement-line";
 const MEASURE_POINT_LAYER_ID = "distance-measurement-points";
 const EARLIEST_YEAR = 2000;
+const FIRMS_SOURCE_ID = "active-fires-firms";
+const FIRMS_LAYER_ID = "active-fires-firms-circles";
+const FIRMS_REFRESH_INTERVAL_MS = 15 * 60 * 1000;
 
 // Linked from the word "EFFIS" in the health warning banner (see
 // effis_status_slow/effis_status_down below) — deliberately a *direct*
@@ -170,6 +179,9 @@ let measurementEnd: LngLat | null = null;
 let measurementPreview: LngLat | null = null;
 let currentEffisHealth: EffisHealth = "ok";
 let dismissedEffisHealth: EffisHealth | null = null;
+let activeFiresProvider: "effis" | "firms" = "effis";
+let firmsRefreshTimer: number | undefined;
+let firmsRequestId = 0;
 
 populateYearSelect();
 
@@ -211,6 +223,7 @@ for (const option of basemapOptions) {
 
 map.on("load", () => {
   addFireLayer(map);
+  addFirmsActiveFiresLayer(map);
   addMeasurementLayers();
   watchEffisHealth(map, handleEffisHealthChange);
 
@@ -339,16 +352,21 @@ function effisWarningHtml(health: EffisHealth): string {
   });
 }
 
-function handleEffisHealthChange(health: EffisHealth): void {
-  currentEffisHealth = health;
-  if (health === "ok") {
+function handleEffisHealthChange(report: EffisHealthReport): void {
+  currentEffisHealth = report.overall;
+  if (report.overall === "ok") {
     dismissedEffisHealth = null;
     effisWarning.hidden = true;
-    return;
+  } else if (report.overall !== dismissedEffisHealth) {
+    effisWarningText.innerHTML = effisWarningHtml(report.overall);
+    effisWarning.hidden = false;
   }
-  if (health === dismissedEffisHealth) return;
-  effisWarningText.innerHTML = effisWarningHtml(health);
-  effisWarning.hidden = false;
+
+  if (report.activeFires === "down" && activeFiresProvider === "effis") {
+    engageFirmsFallback();
+  } else if (report.activeFires !== "down" && activeFiresProvider === "firms") {
+    disengageFirmsFallback();
+  }
 }
 
 effisWarningClose.addEventListener("click", () => {
@@ -359,6 +377,41 @@ effisWarningClose.addEventListener("click", () => {
 function refreshEffisWarningText(): void {
   if (effisWarning.hidden) return;
   effisWarningText.innerHTML = effisWarningHtml(currentEffisHealth);
+}
+
+// --- NASA FIRMS fallback for Active fires ---------------------------
+//
+// EFFIS's own active-fire detection is itself built on NASA FIRMS (see
+// docs/firms-migration-plan.md) — when EFFIS's WMTS pipeline specifically
+// for active fires is down (report.activeFires === "down", see
+// effisHealth.ts), switch that one layer to real FIRMS vector data instead
+// of leaving broken raster tiles on screen. EFFIS stays the default; this
+// only engages as a fallback, and only for "Active fires" — "Burnt areas"
+// and "Past fires" have no FIRMS equivalent and are untouched by this.
+
+async function engageFirmsFallback(): Promise<void> {
+  activeFiresProvider = "firms";
+  applyModeVisibility(); // hide the broken EFFIS tiles immediately, before awaiting the fetch below
+  updateLegend();
+  await refreshFirmsData();
+  firmsRefreshTimer = window.setInterval(refreshFirmsData, FIRMS_REFRESH_INTERVAL_MS);
+}
+
+function disengageFirmsFallback(): void {
+  activeFiresProvider = "effis";
+  window.clearInterval(firmsRefreshTimer);
+  firmsRefreshTimer = undefined;
+  ++firmsRequestId; // invalidate any in-flight refresh so a late response can't overwrite state after we've moved on
+  (map.getSource(FIRMS_SOURCE_ID) as GeoJSONSource | undefined)?.setData(emptyCollection());
+  applyModeVisibility();
+  updateLegend();
+}
+
+async function refreshFirmsData(): Promise<void> {
+  const thisRequest = ++firmsRequestId;
+  const data = await fetchActiveFiresFallback(EUROPE_BBOX);
+  if (thisRequest !== firmsRequestId) return; // stale-response guard, same pattern as loadFires()
+  (map.getSource(FIRMS_SOURCE_ID) as GeoJSONSource | undefined)?.setData(data);
 }
 
 function startMeasurement(): void {
@@ -601,6 +654,40 @@ function addFireLayer(map: MaplibreMap): void {
   });
 }
 
+/** The NASA FIRMS fallback layer for "Active fires" — see the "NASA FIRMS
+ * fallback" section above for when this actually gets populated/shown.
+ * Seeded empty here, same as addFireLayer's FIRE_SOURCE_ID, relying on a
+ * later fetch (refreshFirmsData) to populate it rather than a cached
+ * variable — consistent with how past-fires WFS data is handled. */
+function addFirmsActiveFiresLayer(map: MaplibreMap): void {
+  map.addSource(FIRMS_SOURCE_ID, {
+    type: "geojson",
+    data: emptyCollection(),
+    attribution: FIRMS_ATTRIBUTION,
+  });
+  map.addLayer({
+    id: FIRMS_LAYER_ID,
+    type: "circle",
+    source: FIRMS_SOURCE_ID,
+    layout: { visibility: "none" },
+    paint: {
+      "circle-radius": 5,
+      "circle-color": recencyColorExpression(),
+      "circle-stroke-width": 1,
+      "circle-stroke-color": "#000000",
+    },
+  });
+}
+
+/** Colors each FIRMS point by the same recency-tier scheme legend-config.json
+ * already defines for the "Active fires" legend (see recencyTierFor in
+ * firms.ts) — reusing legendConfig.activeFires.colors directly means the
+ * legend swatches and the real map styling can never drift out of sync. */
+function recencyColorExpression(): ExpressionSpecification {
+  const stops = legendConfig.activeFires.colors.flatMap((c) => [c.labelKey, c.color]);
+  return ["match", ["get", "recencyTier"], ...stops, "#999999"] as unknown as ExpressionSpecification;
+}
+
 async function handleBasemapChange(kind: BasemapKind) {
   setMapLoading(true);
   setStatus(t("loading_style"));
@@ -622,12 +709,17 @@ async function handleBasemapChange(kind: BasemapKind) {
   }
 
   addFireLayer(map);
+  addFirmsActiveFiresLayer(map);
   addMeasurementLayers();
   updateMeasurementData();
   setPastFiresYear(map, Number(yearSelect.value));
   applyModeVisibility();
   setPlaceLabelsVisible(map, placeLabelsCheckbox.checked, getLanguage());
   loadFires();
+  // setStyle() drops every custom source/layer, including FIRMS's — the
+  // freshly re-added source above starts empty and needs repopulating,
+  // same as "fires" does via the loadFires() call just above.
+  if (activeFiresProvider === "firms") refreshFirmsData();
   updateLegend();
 }
 
@@ -669,13 +761,20 @@ function applyModeVisibility() {
   }
 
   const activeFiresVisible = mode === "current" && activeFiresCheckbox.checked;
+  const showEffisActiveFires = activeFiresVisible && activeFiresProvider === "effis";
+  const showFirmsActiveFires = activeFiresVisible && activeFiresProvider === "firms";
   for (const id of ACTIVE_FIRES_LAYER_IDS) {
     map.setLayoutProperty(
       id,
       "visibility",
-      activeFiresVisible ? "visible" : "none",
+      showEffisActiveFires ? "visible" : "none",
     );
   }
+  map.setLayoutProperty(
+    FIRMS_LAYER_ID,
+    "visibility",
+    showFirmsActiveFires ? "visible" : "none",
+  );
 
   const pastVisibility = mode === "past" ? "visible" : "none";
   map.setLayoutProperty(FIRE_FILL_LAYER, "visibility", pastVisibility);
@@ -1000,6 +1099,9 @@ function updateLegend() {
         activeFiresFallback.hidden = true;
       }
     }
+
+    const providerNote = document.getElementById("legend-active-fires-provider");
+    if (providerNote) providerNote.hidden = activeFiresProvider !== "firms";
   }
 
   // 2. Burnt areas / Past fires

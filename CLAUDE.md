@@ -280,12 +280,21 @@ until `src/effisHealth.ts` existed, a failing tile just silently didn't
 render, with zero visibility to the user or to us. `watchEffisHealth(map,
 onChange)` fixes that at the *aggregate* level (not per-tile — see "Known
 unknowns" below for why per-tile still isn't diagnosable) via two
-independent, rolling-window signals, combined into one `"ok" | "slow" |
-"down"` health value:
+independent, rolling-window signals. `onChange` receives an
+`EffisHealthReport` (`{ overall, activeFires, burntAreas, pastFires }`,
+each a `"ok" | "slow" | "down"` value) rather than one flat health value —
+`overall` drives the warning banner below, unchanged in behavior from
+before this had per-group tracking, while the three per-group fields exist
+so a consumer can react to e.g. "Active fires specifically is down" without
+also tripping on a Burnt-areas-only problem it has no fallback for (see
+"NASA FIRMS fallback for Active fires" below, the reason this split exists
+at all):
 - **Tile failures** — `map.on('error', ...)`, filtered to our own raster
   source ids (`TRACKED_SOURCE_IDS`: `BURNT_AREAS_LAYER_IDS` +
   `ACTIVE_FIRES_LAYER_IDS` + `PAST_FIRES_LAYER_ID`) so basemap/border tile
-  failures don't count. This relies on an undocumented-but-real runtime
+  failures don't count; `groupForSourceId()` attributes each failure to
+  exactly one group (source ids don't overlap between groups). This relies
+  on an undocumented-but-real runtime
   behavior: MapLibre's public types don't declare `sourceId` on
   `ErrorEvent`, but every tile source forwards its own 'error' events up
   through the style to the map with `sourceId` mixed in regardless
@@ -302,7 +311,13 @@ independent, rolling-window signals, combined into one `"ok" | "slow" |
   proxies already hard-timeout their upstream fetch at 15s (see
   `REQUEST_TIMEOUT_MS` in `api/effis.ts`/`api/wmts.ts`), so this threshold
   sits well under that ceiling. 3+ slow responses within 30s escalates to
-  `"slow"` (unless already `"down"`). The observer calls
+  `"slow"` (unless already `"down"`). Group attribution here
+  (`groupsForResourceUrl()`) stops at *mount* granularity, not per-tile-layer
+  — `/api/wmts` counts toward both `activeFires` and `burntAreas` (it serves
+  both), `/api/effis` toward `pastFires` only — since that's the real fault
+  boundary this section already documents (the two mounts behave
+  differently from each other; individual layers sharing one mount don't).
+  The observer calls
   `performance.clearResourceTimings()` after each batch — the browser's
   resource-timing buffer silently *stops recording new entries* once full
   (default cap 250, shared with every other same-origin request the page
@@ -343,6 +358,71 @@ place (`main.ts`'s `effisWarningHtml()`) instead of being duplicated across
 every language; `effisWarningText.innerHTML` is safe here since both the
 message template and the injected link markup come from our own static
 sources, never from user input.
+
+**NASA FIRMS fallback for Active fires — engages automatically, EFFIS stays
+the default.** EFFIS's own active-fire detection is itself built on NASA
+FIRMS (confirmed in `docs/firms-migration-plan.md`) — when
+`watchEffisHealth`'s report shows `activeFires: "down"` (see above), `main.ts`
+switches that one layer to real FIRMS data instead of leaving broken raster
+tiles on screen, and switches back the moment `activeFires` stops being
+`"down"`. Scoped deliberately narrow: "Burnt areas" and "Past fires" have no
+FIRMS equivalent (FIRMS is point-hotspot data only, no burned-area/burn-scar
+product — see `docs/firms-migration-plan.md` for the full research) and are
+untouched by this regardless of their own health.
+- `src/firms.ts` fetches NASA's authenticated `area/csv` endpoint (`MODIS_NRT`
+  + all three separate VIIRS `SOURCE` values — FIRMS has no single
+  combined-VIIRS source the way EFFIS's `viirs.hs.week` covers SNPP +
+  NOAA-20/21 together) via `api/firms.ts`, in parallel, merging results
+  client-side. **Accepted coverage gap**: FIRMS has no Sentinel-3 equivalent
+  (EFFIS's third active-fires source, `active-fires-s3`), so a fire visible
+  only to Sentinel-3 won't appear during a fallback.
+- `api/firms.ts` is **not** a passthrough like `api/effis.ts`/`api/wmts.ts`
+  — FIRMS's `MAP_KEY` is a URL *path segment*
+  (`/api/area/csv/{MAP_KEY}/{SOURCE}/{bbox}/{days}`), not a query param, so
+  it can never be something the client supplies or sees. The client sends
+  plain params (`source`/`bbox`/`days`); the handler builds the real FIRMS
+  URL server-side, reading `FIRMS_MAP_KEY` from `process.env` (a Vercel
+  Edge Function env var, configured per-environment in the Vercel
+  dashboard; locally via a git-ignored `.env.local` — see `*.local` in
+  `.gitignore`). `vite.config.ts`'s dev-mode equivalent needs the
+  functional `defineConfig(({mode}) => ...)` form plus `loadEnv(mode,
+  process.cwd(), "")` to read the var inside the config file itself — Vite's
+  automatic `.env`→`import.meta.env` exposure only reaches client code, and
+  the var deliberately has no `VITE_` prefix (a `VITE_`-prefixed var *would*
+  get inlined into the shipped client bundle, leaking the key).
+- Response stays raw CSV — hand-rolled parsing (`parseCsv` in `firms.ts`;
+  no dependency, FIRMS's schema has no embedded delimiters in any field used
+  here) happens client-side, same "dumb proxy, parsing in the browser"
+  precedent as the WFS/`shpjs` flow above.
+- Recency can't be computed by a MapLibre expression (no relative-to-now
+  date math), so `recencyTierFor()` stamps a `recencyTier` property onto
+  each feature right after parsing, reusing `legend-config.json`'s own
+  `activeFires.colors[].labelKey` strings as the tier values — one string is
+  both "the tier" and "the legend-row lookup key," so editing
+  `legend-config.json`'s tiers/colors updates the real `circle-color`
+  paint expression (`recencyColorExpression()` in `main.ts`) and the
+  legend swatches together, with no separate mapping table. Renders as
+  plain circles, not shapes-by-sensor the way the legend depicts MODIS
+  (triangle) vs VIIRS (circle) — deliberately out of scope, would need
+  custom SDF icons in a `symbol` layer.
+- Query covers all of Europe (`EUROPE_BBOX` in `firms.ts`, matching the
+  bbox FIRMS's own `kml_fire_footprints` endpoint uses for its predefined
+  "europe" region), not just `map.ts`'s Spain-scoped `DEFAULT_BOUNDS` — a
+  Spain-only fallback would silently show nothing for fires elsewhere in
+  Europe during an outage, undermining the point of having one.
+- Refreshes every 15 minutes while engaged (`FIRMS_REFRESH_INTERVAL_MS`),
+  and once after every basemap switch alongside the existing `loadFires()`
+  call — `setStyle()` drops every custom source/layer including FIRMS's, so
+  the freshly re-added source starts empty and needs repopulating, exactly
+  like the WFS `fires` source already does.
+- UI signal that FIRMS is currently showing: a small muted note under the
+  "Active Fires" legend heading (`#legend-active-fires-provider`, hidden
+  unless engaged) — deliberately not a second warning banner, since
+  `#effis-warning` already covers "something's wrong" and a second alert
+  for "and we've compensated" would be redundant noise for the system
+  working as designed. Real attribution lives in the About modal's
+  `about_content_html` (see the "no AttributionControl" note below), not
+  the GeoJSON source's inert `attribution` property.
 
 **Country borders are a separate GISCO overlay, not part of the basemap.**
 `addCountryBorders()` in `src/map.ts` fetches Eurostat GISCO's
@@ -405,26 +485,45 @@ update them on its own until the pre-scripts rerun.
   (past fires, 2016+), the WFS pipeline (`fetchHistoricalFires`), and
   property accessors.
 - `src/borders.ts` — fetches + converts the GISCO country-borders topojson.
-- `src/effisHealth.ts` — `watchEffisHealth()`, the aggregate-level "EFFIS
-  is slow/down" detector described above (tile-failure + slow-proxy-response
-  signals). Has no UI of its own; `main.ts` renders its output.
+- `src/effisHealth.ts` — `watchEffisHealth()`, the "EFFIS is slow/down"
+  detector described above (tile-failure + slow-proxy-response signals),
+  reported both as one `overall` value and per-group
+  (`activeFires`/`burntAreas`/`pastFires`). Has no UI of its own; `main.ts`
+  renders its output.
+- `src/firms.ts` — the NASA FIRMS fallback for "Active fires": CSV fetch +
+  parsing, GeoJSON conversion, recency-tier bucketing. No map/UI code of
+  its own, same split as `effis.ts`.
 - `src/main.ts` — wires the map, the current/past mode toggle, the
   active-fires/burnt-areas checkboxes, year `<select>`, click-to-popup
-  behavior, and the EFFIS health warning banner (`handleEffisHealthChange`)
-  together.
-- `index.html` / `src/style.css` — toolbar markup/styling. No custom
-  attribution footer — EFFIS and GISCO attribution are set via each
-  source's `attribution` property (see `map.ts`) and surface through
-  MapLibre's own `AttributionControl`, which is added by default and
-  already carries the basemap's OpenFreeMap/OpenStreetMap credit. `#status`
-  is deliberately single-line (`white-space: nowrap` + `text-overflow:
-  ellipsis`) so a long fetch-result/error message can't wrap and inflate
-  the toolbar's height, especially on narrow viewports; `#toolbar` uses
-  `flex-wrap: wrap` so its growing control count still degrades gracefully
-  on mobile instead of overflowing horizontally.
+  behavior, the EFFIS health warning banner (`handleEffisHealthChange`),
+  and the NASA FIRMS fallback orchestration (`engageFirmsFallback`/
+  `disengageFirmsFallback`/`refreshFirmsData`) together.
+- `index.html` / `src/style.css` — toolbar markup/styling. **No
+  `AttributionControl`** — `map.ts` constructs the `Map` with
+  `attributionControl: false`, so despite each source's `attribution`
+  property still being set (EFFIS's, GISCO's, FIRMS's), none of it is
+  actually visible anywhere in the UI; that property is inert today, kept
+  set only in case `attributionControl` is ever re-enabled. The real,
+  user-visible attribution mechanism is the About modal's
+  `about_content_html` i18n string, which lists EFFIS/NASA
+  FIRMS/OpenFreeMap/GISCO/Esri credits by hand. `#status` is deliberately
+  single-line (`white-space: nowrap` + `text-overflow: ellipsis`) so a long
+  fetch-result/error message can't wrap and inflate the toolbar's height,
+  especially on narrow viewports; `#toolbar` uses `flex-wrap: wrap` so its
+  growing control count still degrades gracefully on mobile instead of
+  overflowing horizontally.
+- `api/firms.ts` — the NASA FIRMS proxy, alongside `api/effis.ts`/
+  `api/wmts.ts` but structurally different from both (see the "NASA FIRMS
+  fallback" section above for why) — not a passthrough, since FIRMS's
+  `MAP_KEY` is a URL path segment that must be injected server-side, never
+  client-visible.
 - `api/effis.ts` + `api/wmts.ts` (Vercel Edge Functions) + `vite.config.ts`
-  (`server.proxy`, two entries) — the WFS and WMTS proxy implementations;
-  each dev/prod pair must stay behaviorally equivalent.
+  (`server.proxy`, three entries now including `/api/firms`) — the WFS and
+  WMTS proxy implementations; each dev/prod pair must stay behaviorally
+  equivalent. `vite.config.ts` switched to the functional
+  `defineConfig(({mode}) => ...)` form + `loadEnv()` specifically to give
+  the `/api/firms` entry access to `FIRMS_MAP_KEY` — the two older entries
+  don't need any env var, so this only mattered once FIRMS was added.
 - `scripts/copy-maplibre-worker.mjs` + `public/` — see the Web Worker
   gotcha above.
 
@@ -511,3 +610,16 @@ failures faster and cleaner, not less frequent. If current fires are down
 in production but a direct `curl` to EFFIS's WMTS endpoint succeeds, this
 is almost certainly what's happening; there's no client-side fix for it,
 since it's about which network the request originates from.
+
+**FIRMS's exact `day_range` maximum for the `area/csv` endpoint is
+unconfirmed** — different NASA docs showed 1–5 in some places and 1–10 in
+others during research (see `docs/firms-migration-plan.md`). `firms.ts`'s
+`DEFAULT_DAY_RANGE` stays at 3, safely under either, so this doesn't block
+anything today; worth confirming live before raising it toward 7 to better
+match the "last 7 days" legend tier.
+
+**The NASA FIRMS fallback covers 2 of EFFIS's 3 active-fire sources'
+sensors, not all 3.** FIRMS has no Sentinel-3 equivalent at all (EFFIS's
+`active-fires-s3` / `s3.hs.week`) — a fire visible only to Sentinel-3 won't
+appear on the map during a fallback. Accepted and documented, not a bug;
+see the "NASA FIRMS fallback for Active fires" section above.

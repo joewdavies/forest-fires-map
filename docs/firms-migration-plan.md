@@ -1,9 +1,15 @@
 # Plan: replace "Active fires" with NASA FIRMS, direct
 
-**Status: research complete, architecture decided (Option A), not yet
-implemented.** Written 2026-07-26, decision confirmed same day. Nothing in
-this doc has been built — it's the plan to start from, not a record of what
-exists.
+**Status: implemented (2026-07-26).** Built as an automatic fallback rather
+than a full replacement: EFFIS stays the default provider for "Active
+fires," and NASA FIRMS engages only when EFFIS's active-fires pipeline
+specifically is detected as down (via `watchEffisHealth`'s per-group
+health report — see CLAUDE.md's "NASA FIRMS fallback for Active fires"
+section for the full implementation writeup: `api/firms.ts`, `src/firms.ts`,
+the `effisHealth.ts` per-group refactor, and the orchestration in
+`main.ts`). This doc's research and Option A recommendation below are what
+that was built from; kept as-is for the reasoning trail rather than folded
+into CLAUDE.md, which now has the implementation-level detail.
 
 ## Motivation
 

@@ -9,7 +9,8 @@
       "Bash(ls -la /c/Github/forest-fires 2>&1)",
       "Read(//c/Github/forest-fires/**)",
       "WebFetch(domain:effis.jrc.ec.europa.eu)",
-      "WebFetch(domain:forest-fire.emergency.copernicus.eu)"
+      "WebFetch(domain:forest-fire.emergency.copernicus.eu)",
+      "Bash(npx tsc *)"
     ]
   }
 }

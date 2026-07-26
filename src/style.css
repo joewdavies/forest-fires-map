@@ -1187,6 +1187,13 @@ body {
   color: #fff;
 }
 
+.legend-provider-note {
+  display: block;
+  font-size: 0.65rem;
+  font-style: italic;
+  color: #999; /* matches .sheet-section h3's existing muted-label color */
+}
+
 .legend-item img {
   max-width: 100%;
   border-radius: 4px;
