@@ -84,7 +84,7 @@ const FIRMS_REFRESH_INTERVAL_MS = 15 * 60 * 1000;
 // event to count anything — a request that just hangs forever without ever
 // erroring wouldn't trip it for a long time, if ever. This is a separate,
 // much blunter one-shot check specifically for a cold, silent start: if
-// nothing at all has come back from EFFIS's WMTS mount within 5s of the
+// nothing at all has come back from EFFIS's WMTS mount within 4s of the
 // page loading, don't wait around for the failure counter to catch up.
 const INITIAL_LOAD_TIMEOUT_MS = 4_000;
 
@@ -574,7 +574,7 @@ const WMTS_PROBE_LAYERS: readonly WmtsLayerKind[] = [
 ];
 
 // Probe one representative Spain tile from every current-fire product.
-// Failed responses keep the five-second observation window open; the first
+// Failed responses keep the four-second observation window open; the first
 // HTTP-successful response proves WMTS is available and cancels the rest.
 function watchWmtsActivity(): void {
   const controller = new AbortController();
@@ -1569,7 +1569,9 @@ document.addEventListener("keydown", (e) => {
 
 function renderActiveFiresFallback() {
   if (!activeFiresFallback) return;
-  let html = `<div class="legend-fallback-section">`;
+  let html = `
+    <div class="legend-fallback-section">
+      <h5 class="legend-fallback-heading">${t("legend_age")}</h5>`;
   legendConfig.activeFires.colors.forEach((item) => {
     html += `
       <div class="legend-fallback-row">
@@ -1577,13 +1579,16 @@ function renderActiveFiresFallback() {
         <span class="legend-fallback-label">${t(item.labelKey)}</span>
       </div>`;
   });
-  html += `</div><div class="legend-fallback-section">`;
+  html += `
+    </div>
+    <div class="legend-fallback-section">
+      <h5 class="legend-fallback-heading">${t("legend_satellite")}</h5>`;
   legendConfig.activeFires.shapes.forEach((item) => {
     let shapeSvg = "";
     if (item.shape === "triangle") {
-      shapeSvg = `<svg width="12" height="12" viewBox="0 0 24 24" class="legend-fallback-shape"><polygon points="12 2, 22 22, 2 22" fill="#fff" /></svg>`;
+      shapeSvg = `<svg width="12" height="12" viewBox="0 0 24 24" class="legend-fallback-shape" aria-hidden="true" focusable="false"><polygon points="12 2, 22 22, 2 22" fill="#fff" /></svg>`;
     } else {
-      shapeSvg = `<svg width="12" height="12" viewBox="0 0 24 24" class="legend-fallback-shape"><circle cx="12" cy="12" r="10" fill="#fff" /></svg>`;
+      shapeSvg = `<svg width="12" height="12" viewBox="0 0 24 24" class="legend-fallback-shape" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10" fill="#fff" /></svg>`;
     }
     // FIRMS has no Sentinel-3 equivalent (see the "NASA FIRMS fallback"
     // section in CLAUDE.md), so its VIIRS row drops the "/ SENTINEL3" half

@@ -433,7 +433,11 @@ full research) and are untouched by this regardless of their own health.
   coverage-gap note above), so
   `legend-config.json`'s `activeFires.shapes[].firmsLabel` gives the VIIRS
   row a FIRMS-only override ("VIIRS") that `renderActiveFiresFallback()` in
-  `main.ts` picks when `activeFiresProvider === "firms"`.
+  `main.ts` picks when `activeFiresProvider === "firms"`. The custom legend
+  presents recency and sensor shapes as two columns under localized "Age"
+  and "Satellite" headings; the wider desktop card and mobile minimum width
+  in `style.css` keep both columns readable without changing the burnt-area
+  legend.
 - Query covers all of Europe (`EUROPE_BBOX` in `firms.ts`, matching the
   bbox FIRMS's own `kml_fire_footprints` endpoint uses for its predefined
   "europe" region), not just `map.ts`'s Spain-scoped `DEFAULT_BOUNDS` — a
@@ -465,7 +469,7 @@ gap. `watchWmtsActivity()` in `main.ts` makes one representative tile probe
 for each of the five current-fire WMTS products and accepts only an HTTP
 successful response; a MapLibre source lifecycle event or HTTP 503/504 does
 not satisfy it. The first successful probe cancels the others. A one-shot
-5s timer (`INITIAL_LOAD_TIMEOUT_MS`) engages the FIRMS fallback if no probe
+4s timer (`INITIAL_LOAD_TIMEOUT_MS`) engages the FIRMS fallback if no probe
 has succeeded by then and the provider is still EFFIS. Engaging FIRMS removes
 all EFFIS WMTS layers and sources, rather than merely hiding them, so
 MapLibre cannot retain or retry WMTS tile work in the background. This means
