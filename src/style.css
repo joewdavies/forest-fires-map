@@ -92,6 +92,15 @@ body {
   flex: 1 1 auto;
 }
 
+.effis-warning a {
+  color: #e25822;
+  text-decoration: none;
+}
+
+.effis-warning a:hover {
+  text-decoration: underline;
+}
+
 .effis-warning button {
   flex: 0 0 auto;
   width: 26px;

@@ -47,6 +47,19 @@ const MEASURE_LINE_LAYER_ID = "distance-measurement-line";
 const MEASURE_POINT_LAYER_ID = "distance-measurement-points";
 const EARLIEST_YEAR = 2000;
 
+// Linked from the word "EFFIS" in the health warning banner (see
+// effis_status_slow/effis_status_down below) — deliberately a *direct*
+// request to EFFIS's real upstream host, bypassing our own /api/wmts proxy
+// entirely, so a user (or a developer debugging a report) can tell whether
+// it's genuinely EFFIS that's struggling or just our proxy path, the same
+// distinction CLAUDE.md's "Known unknowns" documents as otherwise only
+// diagnosable by comparing a direct curl against the proxied request by
+// hand. Not one of our own real tileTemplate() layers/tilematrixset —
+// deliberately a plain, illustrative GetTile call so it means the same
+// thing regardless of which of our layers is actually the one struggling.
+const EFFIS_EXAMPLE_REQUEST_URL =
+  "https://maps.effis.emergency.copernicus.eu/effist/wmts?layer=ghsl&tilematrixset=ECMWF3857&Service=WMTS&Request=GetTile&Version=1.0.0&Format=image%2Fpng&TileMatrix=5&TileCol=17&TileRow=12";
+
 type Mode = "current" | "past";
 
 const mapContainer = document.getElementById("map") as HTMLElement;
@@ -307,6 +320,20 @@ function updateCompass() {
 
 // --- EFFIS health warning ---------------------------------------------
 
+// EFFIS's name in the banner links out to a real, direct example request —
+// see the comment on EFFIS_EXAMPLE_REQUEST_URL above. The translation
+// strings carry {effisLinkOpen}/{effisLinkClose} placeholders (see i18n.ts)
+// rather than raw HTML, so the anchor markup lives in one place instead of
+// being duplicated across every language. Safe as innerHTML: both the
+// message template and the injected link markup come from our own static
+// sources, never from user input.
+function effisWarningHtml(health: EffisHealth): string {
+  return t(health === "down" ? "effis_status_down" : "effis_status_slow", {
+    effisLinkOpen: `<a href="${EFFIS_EXAMPLE_REQUEST_URL}" target="_blank" rel="noopener noreferrer">`,
+    effisLinkClose: "</a>",
+  });
+}
+
 function handleEffisHealthChange(health: EffisHealth): void {
   currentEffisHealth = health;
   if (health === "ok") {
@@ -315,9 +342,7 @@ function handleEffisHealthChange(health: EffisHealth): void {
     return;
   }
   if (health === dismissedEffisHealth) return;
-  effisWarningText.textContent = t(
-    health === "down" ? "effis_status_down" : "effis_status_slow",
-  );
+  effisWarningText.innerHTML = effisWarningHtml(health);
   effisWarning.hidden = false;
 }
 
@@ -328,9 +353,7 @@ effisWarningClose.addEventListener("click", () => {
 
 function refreshEffisWarningText(): void {
   if (effisWarning.hidden) return;
-  effisWarningText.textContent = t(
-    currentEffisHealth === "down" ? "effis_status_down" : "effis_status_slow",
-  );
+  effisWarningText.innerHTML = effisWarningHtml(currentEffisHealth);
 }
 
 function startMeasurement(): void {

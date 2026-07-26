@@ -325,6 +325,25 @@ unplanned but useful, a genuinely live EFFIS outage at the time of testing
 (confirms the real event actually reaches the watcher end to end — see
 "Known unknowns" below).
 
+The word "EFFIS" in both messages (`effis_status_slow`/`effis_status_down`
+in `src/i18n.ts`) links to `EFFIS_EXAMPLE_REQUEST_URL` in `main.ts` — a
+direct `GetTile` request against EFFIS's real upstream host
+(`maps.effis.emergency.copernicus.eu/effist/wmts`), deliberately
+*bypassing* our own `/api/wmts` proxy, so a user (or a developer chasing a
+report) can tell whether it's genuinely EFFIS struggling or just our proxy
+path — the same distinction "Requests through either production proxy have
+been observed hanging even when EFFIS itself is fine" (below) otherwise
+requires comparing a direct `curl` against the proxied request by hand. It
+isn't one of our own real `tileTemplate()` layers/tilematrixset — it's a
+generic, illustrative `GetTile` call so the link means the same thing
+regardless of which of our actual layers is the one currently struggling.
+The translation strings carry `{effisLinkOpen}`/`{effisLinkClose}`
+placeholders rather than raw `<a>` markup, so the link itself lives in one
+place (`main.ts`'s `effisWarningHtml()`) instead of being duplicated across
+every language; `effisWarningText.innerHTML` is safe here since both the
+message template and the injected link markup come from our own static
+sources, never from user input.
+
 **Country borders are a separate GISCO overlay, not part of the basemap.**
 `addCountryBorders()` in `src/map.ts` fetches Eurostat GISCO's
 `CNTR_BN_20M_2024_4326` topojson (country borders + coastlines as
