@@ -775,13 +775,20 @@ body {
   height: 18px;
 }
 
-/* Centered on the map itself (not tucked into a toolbar corner) so it's
-   hard to miss — this is the only persistent indicator that fire/tile data
-   is actively loading, and a small corner spinner was easy to overlook. */
+/* Kept in the map's bottom-right corner so fire-data loading never obscures
+   the map's focal point. main.ts overrides the two custom properties while
+   the legend is visible, moving this beside the desktop card or above the
+   mobile sheet. */
 .map-loading-indicator {
   position: absolute;
-  top: 50%;
-  left: 50%;
+  right: var(
+    --map-loading-indicator-right,
+    max(16px, calc(env(safe-area-inset-right) + 16px))
+  );
+  bottom: var(
+    --map-loading-indicator-bottom,
+    max(16px, calc(env(safe-area-inset-bottom) + 16px))
+  );
   width: 40px;
   height: 40px;
   border: 4px solid rgba(255, 255, 255, 0.4);
@@ -792,12 +799,11 @@ body {
   opacity: 0;
   pointer-events: none;
   z-index: 16;
-  transition: opacity 0.15s ease;
-  /* translate(-50%, -50%) does the centering; rotate(0deg) here (rather
-     than omitting it) keeps this transform's function list the same shape
-     as the keyframe's below, so the animation interpolates the rotation
-     smoothly instead of the centering offset itself jumping mid-spin. */
-  transform: translate(-50%, -50%) rotate(0deg);
+  transition:
+    opacity 0.15s ease,
+    right 0.2s ease,
+    bottom 0.2s ease;
+  transform: rotate(0deg);
   animation: map-loading-spin 0.75s linear infinite;
 }
 
@@ -807,7 +813,7 @@ body {
 
 @keyframes map-loading-spin {
   to {
-    transform: translate(-50%, -50%) rotate(360deg);
+    transform: rotate(360deg);
   }
 }
 

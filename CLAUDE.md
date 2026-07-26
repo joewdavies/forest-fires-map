@@ -618,14 +618,16 @@ principle used by the EFFIS request paths.
   fetch-result/error message can't wrap and inflate the toolbar's height,
   especially on narrow viewports; `#toolbar` uses `flex-wrap: wrap` so its
   growing control count still degrades gracefully on mobile instead of
-  overflowing horizontally. `#map-loading-indicator` is centered on `#map`
-  itself (a direct child, not nested in `.search-container` — it used to be,
-  tucked into a toolbar corner, easy to miss) — `top/left: 50%` plus
-  `transform: translate(-50%, -50%) rotate(...)`, where the base rule's
-  `rotate(0deg)` isn't decorative: it keeps the transform's function-list
-  shape identical to the `@keyframes` rule's `translate(...) rotate(360deg)`,
-  so the animation interpolates the rotation smoothly instead of the
-  centering offset itself jumping every cycle. The two legend `<img>` tags
+  overflowing horizontally. `#map-loading-indicator` sits in `#map`'s
+  bottom-right corner so it does not cover the map's focal point. While the
+  legend is visible, `updateLoadingIndicatorLegendClearance()` measures that
+  card via `ResizeObserver` and CSS custom properties: the spinner moves left
+  of the fixed-width desktop card or above the variable-height mobile sheet,
+  with both offsets capped to keep the spinner inside unusually short or
+  narrow maps, then returns to the safe-area-aware corner when the legend
+  closes. Its animation therefore needs only a rotation transform, with
+  placement handled independently by `right`/`bottom`. The two legend `<img>`
+  tags
   (`#legend-img-active-fires`/`#legend-img-burnt-areas`) deliberately have
   **no `src` attribute in the HTML** — a static `src` is fetched by the
   browser the instant it's parsed, regardless of any JS/config check

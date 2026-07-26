@@ -190,6 +190,7 @@ const legendCard = document.getElementById("legend-card") as HTMLElement;
 const legendCloseBtn = document.getElementById(
   "legend-close",
 ) as HTMLButtonElement;
+const mobileLegendMediaQuery = window.matchMedia("(max-width: 768px)");
 
 const activeFiresImg = document.getElementById(
   "legend-img-active-fires",
@@ -1442,6 +1443,60 @@ document.addEventListener("keydown", (e) => {
 
 // --- Legend Logic --------------------------------------------------
 
+const LOADING_INDICATOR_LEGEND_GAP_PX = 16;
+
+function updateLoadingIndicatorLegendClearance(): void {
+  mapLoadingIndicator.style.removeProperty("--map-loading-indicator-right");
+  mapLoadingIndicator.style.removeProperty("--map-loading-indicator-bottom");
+  if (legendCard.hidden) return;
+
+  const legendStyle = window.getComputedStyle(legendCard);
+  if (mobileLegendMediaQuery.matches) {
+    const bottomInset = Number.parseFloat(legendStyle.bottom) || 0;
+    const desiredBottom =
+      legendCard.offsetHeight +
+      bottomInset +
+      LOADING_INDICATOR_LEGEND_GAP_PX;
+    const maximumBottom = Math.max(
+      0,
+      mapContainer.clientHeight -
+        mapLoadingIndicator.offsetHeight -
+        LOADING_INDICATOR_LEGEND_GAP_PX,
+    );
+    mapLoadingIndicator.style.setProperty(
+      "--map-loading-indicator-bottom",
+      `${Math.min(desiredBottom, maximumBottom)}px`,
+    );
+  } else {
+    const rightInset = Number.parseFloat(legendStyle.right) || 0;
+    const desiredRight =
+      legendCard.offsetWidth +
+      rightInset +
+      LOADING_INDICATOR_LEGEND_GAP_PX;
+    const maximumRight = Math.max(
+      0,
+      mapContainer.clientWidth -
+        mapLoadingIndicator.offsetWidth -
+        LOADING_INDICATOR_LEGEND_GAP_PX,
+    );
+    mapLoadingIndicator.style.setProperty(
+      "--map-loading-indicator-right",
+      `${Math.min(desiredRight, maximumRight)}px`,
+    );
+  }
+}
+
+const loadingIndicatorClearanceObserver = new ResizeObserver(() => {
+  updateLoadingIndicatorLegendClearance();
+});
+loadingIndicatorClearanceObserver.observe(legendCard);
+loadingIndicatorClearanceObserver.observe(mapContainer);
+mobileLegendMediaQuery.addEventListener(
+  "change",
+  updateLoadingIndicatorLegendClearance,
+);
+updateLoadingIndicatorLegendClearance();
+
 function updateLegend() {
   const isCurrentMode = mode === "current";
   const useCustomLegend = config.legendType === "custom";
@@ -1539,6 +1594,7 @@ legendBtn.addEventListener("click", () => {
   const isOpen = !legendCard.classList.contains("open");
   if (isOpen) {
     legendCard.hidden = false;
+    updateLoadingIndicatorLegendClearance();
     updateLegend();
     requestAnimationFrame(() => {
       legendCard.classList.add("open");
@@ -1554,6 +1610,7 @@ function closeLegendCard() {
     "transitionend",
     () => {
       legendCard.hidden = true;
+      updateLoadingIndicatorLegendClearance();
     },
     { once: true },
   );
