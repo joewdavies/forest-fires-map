@@ -66,6 +66,7 @@ const MEASURE_LINE_LAYER_ID = "distance-measurement-line";
 const MEASURE_POINT_LAYER_ID = "distance-measurement-points";
 const EARLIEST_YEAR = 2000;
 const FIRMS_SOURCE_ID = "active-fires-firms";
+const FIRMS_GLOW_LAYER_ID = "active-fires-firms-glow";
 const FIRMS_LAYER_ID = "active-fires-firms-circles";
 const FIRMS_MODIS_LAYER_ID = "active-fires-firms-modis";
 const FIRMS_MODIS_ICON_ID = "firms-modis-triangle";
@@ -852,6 +853,46 @@ function addFirmsActiveFiresLayer(map: MaplibreMap): void {
   // firms.ts's rowsToFeatures; "MODIS_NRT" is MODIS, everything else is one
   // of the three VIIRS sources).
   map.addLayer({
+    id: FIRMS_GLOW_LAYER_ID,
+    type: "heatmap",
+    source: FIRMS_SOURCE_ID,
+    layout: { visibility: "none" },
+    paint: {
+      "heatmap-weight": 1,
+      "heatmap-intensity": [
+        "interpolate",
+        ["linear"],
+        ["zoom"],
+        3,
+        0.75,
+        8,
+        1.15,
+        14,
+        1.5,
+      ],
+      "heatmap-radius": firmsGlowRadiusExpression(),
+      "heatmap-color": [
+        "interpolate",
+        ["linear"],
+        ["heatmap-density"],
+        0,
+        "rgba(226, 88, 34, 0)",
+        0.15,
+        "rgba(226, 88, 34, 0.18)",
+        0.35,
+        "rgba(255, 112, 38, 0.4)",
+        0.6,
+        "rgba(255, 181, 64, 0.68)",
+        0.82,
+        "rgba(255, 228, 128, 0.86)",
+        1,
+        "rgba(255, 249, 210, 0.96)",
+      ],
+      "heatmap-opacity": 0.78,
+    },
+  });
+
+  map.addLayer({
     id: FIRMS_LAYER_ID,
     type: "circle",
     source: FIRMS_SOURCE_ID,
@@ -948,6 +989,18 @@ function firmsIconSizeExpression(): ExpressionSpecification {
   ] as ExpressionSpecification;
 }
 
+function firmsGlowRadiusExpression(): ExpressionSpecification {
+  return [
+    "interpolate",
+    ["linear"],
+    ["zoom"],
+    ...FIRMS_POINT_RADIUS_STOPS.flatMap(([zoom, radius]) => [
+      zoom,
+      radius * 4,
+    ]),
+  ] as ExpressionSpecification;
+}
+
 async function handleBasemapChange(kind: BasemapKind) {
   setStatus(t("loading_style"));
   try {
@@ -1040,6 +1093,11 @@ function applyModeVisibility() {
       );
     }
   }
+  map.setLayoutProperty(
+    FIRMS_GLOW_LAYER_ID,
+    "visibility",
+    showFirmsActiveFires ? "visible" : "none",
+  );
   map.setLayoutProperty(
     FIRMS_LAYER_ID,
     "visibility",

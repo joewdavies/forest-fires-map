@@ -415,7 +415,12 @@ full research) and are untouched by this regardless of their own health.
   true })` (`ensureFirmsModisIcon()`) so `icon-color` can recolor it by
   recency tier the same way `circle-color` does for VIIRS. Both shapes use
   zoom-interpolated sizing from `FIRMS_POINT_RADIUS_STOPS`: compact at
-  continent scale and progressively larger when zoomed in. Both layers are
+  continent scale and progressively larger when zoomed in. A heatmap layer
+  (`active-fires-firms-glow`) sits beneath both crisp marker layers and uses
+  accumulated `heatmap-density` to progress from transparent orange through
+  amber to a pale-yellow hot core, so overlapping detections shine brighter
+  and carry more visual weight without losing the sensor-specific shapes.
+  All three layers are
   re-added on every basemap switch alongside the source itself (see below),
   since `setStyle()` drops registered images too. The "VIIRS / SENTINEL3"
   legend label that's accurate for EFFIS's own three-sensor coverage is
