@@ -1,6 +1,10 @@
 :root {
   color-scheme: light dark;
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
 }
 
 * {
@@ -92,11 +96,11 @@ body {
 /* ---------- Layers control: FAB + bottom sheet (Google Maps mobile style) ---------- */
 
 /* Sits on the map itself, below the NavigationControl's zoom buttons
-   (top-right, ~10px inset, ~58px tall) rather than bottom-right, which
+   (top-right, ~10px inset, ~96px tall) rather than bottom-right, which
    already holds the collapsed attribution control. */
 .map-actions-group {
   position: absolute;
-  top: max(96px, calc(env(safe-area-inset-top) + 96px));
+  top: max(106px, calc(env(safe-area-inset-top) + 106px));
   right: max(10px, env(safe-area-inset-right));
   display: flex;
   flex-direction: column;
@@ -146,8 +150,8 @@ body {
 
 .maplibregl-ctrl-group button {
   background-color: transparent !important;
-  width: 36px !important;
-  height: 36px !important;
+  width: 44px !important;
+  height: 44px !important;
   border: none !important;
   cursor: pointer;
   display: flex;
@@ -172,7 +176,9 @@ body {
 #compass-btn {
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.25s ease, transform 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  transition:
+    opacity 0.25s ease,
+    transform 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
 #compass-btn.visible {
@@ -198,6 +204,94 @@ body {
 .fab svg {
   width: 22px;
   height: 22px;
+}
+
+/* ---------- Tooltip component (desktop only) ---------- */
+
+/* Reads `aria-label` directly via attr() rather than a separate
+   data-tooltip value, so tooltip text is always identical to — and stays
+   in sync with — the accessible name already maintained by
+   data-i18n-aria-label in i18n.ts; no extra translation wiring needed.
+   Scoped with the `hover`/`pointer` media features (not a max-width
+   breakpoint) so it naturally disables itself on touch-only devices,
+   where there's no hover state to trigger it and it would otherwise
+   linger after a tap. */
+.has-tooltip {
+  position: relative;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .has-tooltip::after {
+    content: attr(aria-label);
+    position: absolute;
+    top: 50%;
+    left: calc(100% + 10px);
+    transform: translateY(-50%) translateX(-4px);
+    padding: 0.4rem 0.65rem;
+    border: 1px solid #3a3a3a;
+    border-radius: 6px;
+    background: #1b1b1b;
+    color: #fff;
+    font-size: 0.78rem;
+    line-height: 1.2;
+    white-space: nowrap;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
+    opacity: 0;
+    pointer-events: none;
+    z-index: 40;
+    transition:
+      opacity 0.12s ease,
+      transform 0.12s ease;
+  }
+
+  .has-tooltip:hover::after {
+    opacity: 1;
+    transform: translateY(-50%) translateX(0);
+    /* Delay only on show, so hover-out still hides instantly. */
+    transition-delay: 0.35s;
+  }
+
+  .has-tooltip:focus-visible::after {
+    opacity: 1;
+    transform: translateY(-50%) translateX(0);
+    transition-delay: 0s;
+  }
+
+  /* Position modifiers: which side of the element the tooltip opens
+     toward. Default (above) suits most controls; use these where the
+     default would run off-screen or collide with nearby UI. */
+  .has-tooltip[data-tooltip-pos="left"]::after {
+    left: auto;
+    right: calc(100% + 10px);
+    transform: translateY(-50%) translateX(4px);
+  }
+  .has-tooltip[data-tooltip-pos="left"]:hover::after,
+  .has-tooltip[data-tooltip-pos="left"]:focus-visible::after {
+    transform: translateY(-50%) translateX(0);
+  }
+
+  .has-tooltip[data-tooltip-pos="bottom"]::after {
+    top: calc(100% + 10px);
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%) translateY(-4px);
+  }
+  .has-tooltip[data-tooltip-pos="bottom"]:hover::after,
+  .has-tooltip[data-tooltip-pos="bottom"]:focus-visible::after {
+    transform: translateX(-50%) translateY(0);
+  }
+
+  .has-tooltip[data-tooltip-pos="top"]::after {
+    top: auto;
+    bottom: calc(100% + 10px);
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%) translateY(4px);
+  }
+  .has-tooltip[data-tooltip-pos="top"]:hover::after,
+  .has-tooltip[data-tooltip-pos="top"]:focus-visible::after {
+    transform: translateX(-50%) translateY(0);
+  }
 }
 
 .measure-tooltip {
@@ -390,27 +484,27 @@ body {
 }
 
 .basemap-thumb-plain {
-  background-image: url('/thumbnails/plain.png');
+  background-image: url("/thumbnails/plain.png");
 }
 
 .basemap-thumb-positron {
-  background-image: url('/thumbnails/positron.png');
+  background-image: url("/thumbnails/positron.png");
 }
 
 .basemap-thumb-bright {
-  background-image: url('/thumbnails/bright.png');
+  background-image: url("/thumbnails/bright.png");
 }
 
 .basemap-thumb-liberty {
-  background-image: url('/thumbnails/liberty.png');
+  background-image: url("/thumbnails/liberty.png");
 }
 
 .basemap-thumb-dark {
-  background-image: url('/thumbnails/dark.png');
+  background-image: url("/thumbnails/dark.png");
 }
 
 .basemap-thumb-fiord {
-  background-image: url('/thumbnails/fiord.png');
+  background-image: url("/thumbnails/fiord.png");
 }
 
 .basemap-thumb-satellite {
@@ -420,7 +514,7 @@ body {
 }
 
 .basemap-thumb-3d {
-  background-image: url('/thumbnails/3d.png');
+  background-image: url("/thumbnails/3d.png");
 }
 
 .segmented {
@@ -709,7 +803,10 @@ body {
     opacity: 0;
     padding: 0;
     pointer-events: none;
-    transition: width 0.3s ease, opacity 0.2s ease, padding 0.3s ease;
+    transition:
+      width 0.3s ease,
+      opacity 0.2s ease,
+      padding 0.3s ease;
   }
 
   .search-container.expanded #search-input {
@@ -720,7 +817,10 @@ body {
   }
 
   #search-btn {
-    transition: right 0.3s ease, width 0.3s ease, height 0.3s ease;
+    transition:
+      right 0.3s ease,
+      width 0.3s ease,
+      height 0.3s ease;
   }
 
   .search-container:not(.expanded) #search-btn {
@@ -758,7 +858,9 @@ body {
   justify-content: center;
   border-radius: 50%;
   padding: 0;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
 }
 
 .lang-btn:hover,
@@ -796,7 +898,9 @@ body {
   text-align: left;
   cursor: pointer;
   width: 100%;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
 }
 
 .lang-option:hover {
@@ -830,7 +934,9 @@ body {
   justify-content: center;
   border-radius: 50%;
   padding: 0;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
 }
 
 .about-btn:hover {
@@ -860,7 +966,9 @@ body {
   flex-direction: column;
   opacity: 0;
   pointer-events: none;
-  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease;
+  transition:
+    transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+    opacity 0.2s ease;
 }
 
 .modal.open {
@@ -902,6 +1010,19 @@ body {
   text-align: center;
   font-style: italic;
   color: #ccc;
+}
+
+.modal-body .about-project-link a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-weight: 600;
+}
+
+.modal-body .about-project-link svg {
+  width: 1.15rem;
+  height: 1.15rem;
+  flex: 0 0 auto;
 }
 
 .modal-body ul {
@@ -946,7 +1067,9 @@ body {
   opacity: 0;
   transform: translateY(10px);
   pointer-events: none;
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
 }
 
 .legend-card.open {

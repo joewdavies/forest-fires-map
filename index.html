@@ -15,7 +15,8 @@
             <button
               type="button"
               id="lang-btn"
-              class="lang-btn"
+              class="lang-btn has-tooltip"
+              data-tooltip-pos="bottom"
               data-i18n-aria-label="aria_change_language"
               aria-label="Change language"
             >
@@ -35,7 +36,8 @@
           <button
             type="button"
             id="about-btn"
-            class="about-btn"
+            class="about-btn has-tooltip"
+            data-tooltip-pos="bottom"
             data-i18n-aria-label="aria_about"
             aria-label="About the app"
           >
@@ -52,7 +54,8 @@
           <button
             type="button"
             id="layers-btn"
-            class="fab"
+            class="fab has-tooltip"
+            data-tooltip-pos="left"
             aria-haspopup="dialog"
             aria-expanded="false"
             aria-controls="layers-sheet"
@@ -69,7 +72,8 @@
           <button
             type="button"
             id="legend-btn"
-            class="fab"
+            class="fab has-tooltip"
+            data-tooltip-pos="left"
             data-i18n-aria-label="aria_legend"
             aria-label="Map Legend"
           >
@@ -86,7 +90,8 @@
           <button
             type="button"
             id="measure-btn"
-            class="fab"
+            class="fab has-tooltip"
+            data-tooltip-pos="left"
             aria-pressed="false"
             data-i18n-aria-label="aria_measure_distance"
             aria-label="Measure distance"
@@ -103,7 +108,8 @@
           <button
             type="button"
             id="compass-btn"
-            class="fab"
+            class="fab has-tooltip"
+            data-tooltip-pos="left"
             data-i18n-aria-label="aria_compass"
             aria-label="Reset orientation to North"
           >
@@ -152,7 +158,7 @@
         <div class="modal-body" data-i18n="about_content_html"></div>
       </div>
 
-      <div id="legend-card" class="legend-card" hidden>
+      <div id="legend-card" class="legend-card open">
         <div class="legend-header">
           <h3 data-i18n="legend_title">Legend</h3>
           <button type="button" id="legend-close" class="legend-close" data-i18n-aria-label="aria_close" aria-label="Close">&times;</button>

@@ -1,6 +1,6 @@
-# European Forest Fires
+# Forest Fires Map
 
-A MapLibre GL viewer for forest fires in Europe. Shows current active-fire
+A MapLibre GL viewer for forest fires / wildfires. Shows current active-fire
 hotspots and burnt-area perimeters by default (each independently
 toggleable), with a mode switch to browse historical burnt areas by year
 instead. Rendered as a globe with a white basemap and black place-name
@@ -17,8 +17,6 @@ labels.
   `ms:modis.ba.poly` WFS vector layer. EFFIS's WFS interface has proven very
   unreliable in practice, which is why current fires use WMS instead — see
   CLAUDE.md for the full story.
-- **Country borders**: [GISCO](https://gisco-services.ec.europa.eu/) (Eurostat)
-  country boundary lines, converted from topojson client-side.
 - **Basemap**: [OpenFreeMap](https://openfreemap.org/) (Liberty style) — free
   vector tiles, no API key required.
 
