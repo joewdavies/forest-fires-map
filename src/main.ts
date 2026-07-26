@@ -47,7 +47,11 @@ import {
   type EffisHealth,
   type EffisHealthReport,
 } from "./effisHealth";
-import { fetchActiveFiresFallback, EUROPE_BBOX, FIRMS_ATTRIBUTION } from "./firms";
+import {
+  fetchActiveFiresFallback,
+  EUROPE_BBOX,
+  FIRMS_ATTRIBUTION,
+} from "./firms";
 
 inject();
 injectSpeedInsights();
@@ -122,9 +126,7 @@ const compassBtn = document.getElementById("compass-btn") as HTMLButtonElement;
 const compassNeedle = document.getElementById(
   "compass-needle",
 ) as SVGElement | null;
-const measureBtn = document.getElementById(
-  "measure-btn",
-) as HTMLButtonElement;
+const measureBtn = document.getElementById("measure-btn") as HTMLButtonElement;
 const measureTooltip = document.getElementById(
   "measure-tooltip",
 ) as HTMLElement;
@@ -452,7 +454,10 @@ async function engageFirmsFallback(): Promise<void> {
   applyModeVisibility();
   updateLegend();
   await refreshFirmsData();
-  firmsRefreshTimer = window.setInterval(refreshFirmsData, FIRMS_REFRESH_INTERVAL_MS);
+  firmsRefreshTimer = window.setInterval(
+    refreshFirmsData,
+    FIRMS_REFRESH_INTERVAL_MS,
+  );
 }
 
 function disengageFirmsFallback(): void {
@@ -589,7 +594,7 @@ function addMeasurementLayers(): void {
       source: MEASURE_SOURCE_ID,
       filter: ["==", ["geometry-type"], "Point"],
       paint: {
-        "circle-radius": 6,
+        "circle-radius": 4,
         "circle-color": "#fff",
         "circle-stroke-color": "#e25822",
         "circle-stroke-width": 3,
@@ -855,8 +860,16 @@ function ensureFirmsModisIcon(map: MaplibreMap): void {
  * firms.ts) — reusing legendConfig.activeFires.colors directly means the
  * legend swatches and the real map styling can never drift out of sync. */
 function recencyColorExpression(): ExpressionSpecification {
-  const stops = legendConfig.activeFires.colors.flatMap((c) => [c.labelKey, c.color]);
-  return ["match", ["get", "recencyTier"], ...stops, "#999999"] as unknown as ExpressionSpecification;
+  const stops = legendConfig.activeFires.colors.flatMap((c) => [
+    c.labelKey,
+    c.color,
+  ]);
+  return [
+    "match",
+    ["get", "recencyTier"],
+    ...stops,
+    "#999999",
+  ] as unknown as ExpressionSpecification;
 }
 
 async function handleBasemapChange(kind: BasemapKind) {
@@ -1297,7 +1310,9 @@ function updateLegend() {
       }
     }
 
-    const providerNote = document.getElementById("legend-active-fires-provider");
+    const providerNote = document.getElementById(
+      "legend-active-fires-provider",
+    );
     if (providerNote) providerNote.hidden = activeFiresProvider !== "firms";
   }
 
