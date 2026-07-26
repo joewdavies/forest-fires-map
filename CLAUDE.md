@@ -433,11 +433,12 @@ full research) and are untouched by this regardless of their own health.
   coverage-gap note above), so
   `legend-config.json`'s `activeFires.shapes[].firmsLabel` gives the VIIRS
   row a FIRMS-only override ("VIIRS") that `renderActiveFiresFallback()` in
-  `main.ts` picks when `activeFiresProvider === "firms"`. The custom legend
-  presents recency and sensor shapes as two columns under localized "Age"
-  and "Satellite" headings; the wider desktop card and mobile minimum width
-  in `style.css` keep both columns readable without changing the burnt-area
-  legend.
+  `main.ts` picks when `activeFiresProvider === "firms"`. On mobile, the
+  active-fire item spans the legend's existing two-column grid and presents
+  recency on the left and sensor shapes on the right under localized "Age"
+  and "Satellite" headings; burnt areas flow onto the next row instead of
+  becoming a third horizontal column. Desktop retains the original compact,
+  vertically stacked legend.
 - Query covers all of Europe (`EUROPE_BBOX` in `firms.ts`, matching the
   bbox FIRMS's own `kml_fire_footprints` endpoint uses for its predefined
   "europe" region), not just `map.ts`'s Spain-scoped `DEFAULT_BOUNDS` — a
