@@ -246,6 +246,15 @@ const MAX_LOADING_INDICATOR_MS = 15_000;
 function setMapLoading(loading: boolean): void {
   window.clearTimeout(loadingIndicatorHideTimer);
   if (loading) {
+    // The provider-handoff popup has its own inline spinner. Suppress the
+    // larger centered spinner while that message is visible so the two
+    // indicators never overlap.
+    if (!providerFallbackStatus.hidden) {
+      window.clearTimeout(loadingIndicatorSafetyTimer);
+      loadingIndicatorSafetyTimer = undefined;
+      mapLoadingIndicator.classList.remove("active");
+      return;
+    }
     mapLoadingIndicator.classList.add("active");
     // Only arm the safety timer on the first event in a loading streak.
     // Re-arming it for every retry would keep pushing the ceiling back.

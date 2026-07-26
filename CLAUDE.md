@@ -470,7 +470,9 @@ stack. Basemap changes also skip recreating that stack while FIRMS remains
 selected. During the automatic handoff, `#provider-fallback-status` shows a
 localized, non-blocking popup explaining that EFFIS is down and NASA FIRMS
 is being queried; it is hidden in a `finally` block when that request
-settles. This timer only ever runs
+settles. That popup has its own inline spinner, so `setMapLoading()` suppresses
+the larger centered fire-data spinner while the popup is visible to prevent
+the two indicators overlapping. This timer only ever runs
 once, at page load, and there is no automatic path back to EFFIS — an
 earlier version tried to auto-revert once `watchEffisHealth` next reported
 `activeFires` as not-`"down"`, but that reverted the cold-start-triggered
