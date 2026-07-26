@@ -420,6 +420,11 @@ full research) and are untouched by this regardless of their own health.
   accumulated `heatmap-density` to progress from transparent orange through
   amber to a pale-yellow hot core, so overlapping detections shine brighter
   and carry more visual weight without losing the sensor-specific shapes.
+  Its radius, intensity, and opacity follow a separate zoom curve that stays
+  deliberately compact at continent scale, then builds toward the full
+  firefly effect at closer zooms; do not tie it back to marker sizing or
+  sparse detections will imply unrealistically broad fire areas when zoomed
+  out.
   All three layers are
   re-added on every basemap switch alongside the source itself (see below),
   since `setStyle()` drops registered images too. The "VIIRS / SENTINEL3"
