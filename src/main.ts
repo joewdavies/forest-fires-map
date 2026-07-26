@@ -59,6 +59,13 @@ const MEASURE_POINT_LAYER_ID = "distance-measurement-points";
 const EARLIEST_YEAR = 2000;
 const FIRMS_SOURCE_ID = "active-fires-firms";
 const FIRMS_LAYER_ID = "active-fires-firms-circles";
+const FIRMS_MODIS_LAYER_ID = "active-fires-firms-modis";
+const FIRMS_MODIS_ICON_ID = "firms-modis-triangle";
+// EFFIS's own hotspot tiles render small — this keeps FIRMS's own points in
+// the same ballpark instead of dominating the map. Kept as a single source
+// of truth for both shapes: the triangle icon (see ensureFirmsModisIcon) is
+// sized off this same number so MODIS/VIIRS points read as the same size.
+const FIRMS_POINT_RADIUS = 3.5;
 const FIRMS_REFRESH_INTERVAL_MS = 15 * 60 * 1000;
 // The rolling-window "down" threshold in effisHealth.ts (4 failures/20s) is
 // tuned for detecting sustained degradation, and needs an actual error
@@ -83,12 +90,6 @@ const EFFIS_EXAMPLE_REQUEST_URL =
   "https://maps.effis.emergency.copernicus.eu/effist/wmts?layer=ghsl&tilematrixset=ECMWF3857&Service=WMTS&Request=GetTile&Version=1.0.0&Format=image%2Fpng&TileMatrix=5&TileCol=17&TileRow=12";
 
 type Mode = "current" | "past";
-// "auto" defers to watchEffisHealth/the cold-start check; "effis"/"firms"
-// are an explicit user pin that suppresses both until switched back to
-// "auto" — otherwise a user picking "EFFIS" while it's down would just get
-// silently overridden back to FIRMS moments later, which would look broken
-// rather than intentional.
-type ActiveFiresSourceMode = "auto" | "effis" | "firms";
 
 const mapContainer = document.getElementById("map") as HTMLElement;
 const statusEl = document.getElementById("status") as HTMLElement;
@@ -140,9 +141,6 @@ const effisWarningClose = document.getElementById(
   "effis-warning-close",
 ) as HTMLButtonElement;
 
-const activeFiresSourceAutoBtn = document.getElementById(
-  "active-fires-source-auto",
-) as HTMLButtonElement;
 const activeFiresSourceEffisBtn = document.getElementById(
   "active-fires-source-effis",
 ) as HTMLButtonElement;
@@ -202,13 +200,10 @@ let measurementStart: LngLat | null = null;
 let measurementEnd: LngLat | null = null;
 let measurementPreview: LngLat | null = null;
 let currentEffisHealth: EffisHealth = "ok";
-let currentActiveFiresHealth: EffisHealth = "ok";
 let dismissedEffisHealth: EffisHealth | null = null;
 let activeFiresProvider: "effis" | "firms" = "effis";
-let activeFiresSourceMode: ActiveFiresSourceMode = "auto";
 let firmsRefreshTimer: number | undefined;
 let firmsRequestId = 0;
-let firmsEngagedByColdStart = false;
 
 populateYearSelect();
 
@@ -222,13 +217,42 @@ const popup = new Popup({
 });
 
 let loadingIndicatorHideTimer: number | undefined;
+let loadingIndicatorSafetyTimer: number | undefined;
+// MapLibre's 'idle' event can get stuck indefinitely once a raster tile
+// source enters a sustained error/retry loop against a flaky backend —
+// confirmed live: a repeatedly-erroring EFFIS WMTS tile source (see
+// CLAUDE.md's "Known unknowns" on EFFIS's backend strain) can mean 'idle'
+// never fires again for the rest of the session, since MapLibre keeps
+// retrying the failing tile and re-entering a loading state faster than it
+// ever lands on a clean "everything settled" snapshot. Without a ceiling,
+// the indicator would then spin forever even though nothing is actually
+// happening — same "don't trust EFFIS to behave, always have a timeout"
+// principle already applied everywhere else EFFIS is involved (see
+// REQUEST_TIMEOUT_MS in effis.ts and both api/*.ts proxies).
+const MAX_LOADING_INDICATOR_MS = 15_000;
 
 function setMapLoading(loading: boolean): void {
   window.clearTimeout(loadingIndicatorHideTimer);
   if (loading) {
     mapLoadingIndicator.classList.add("active");
+    // Only arm the safety timer on the *first* 'dataloading' of a new
+    // loading streak (guarded by the undefined check) — re-arming it on
+    // every subsequent 'dataloading' would measure "time since the most
+    // recent event" instead of "how long this streak has run", which is
+    // exactly the retry-loop pattern this exists to catch: a source that
+    // keeps re-entering 'dataloading' forever would just keep pushing the
+    // ceiling back out and never actually hit it.
+    if (loadingIndicatorSafetyTimer === undefined) {
+      loadingIndicatorSafetyTimer = window.setTimeout(() => {
+        loadingIndicatorSafetyTimer = undefined;
+        mapLoadingIndicator.classList.remove("active");
+      }, MAX_LOADING_INDICATOR_MS);
+    }
     return;
   }
+
+  window.clearTimeout(loadingIndicatorSafetyTimer);
+  loadingIndicatorSafetyTimer = undefined;
 
   // A short delay prevents the indicator flashing between adjacent tile
   // requests while a basemap or WMS/WMTS layer is still filling the view.
@@ -380,41 +404,22 @@ function effisWarningHtml(health: EffisHealth): string {
   });
 }
 
+// Drives only the "EFFIS is slow/down" warning banner. Deliberately does
+// *not* touch activeFiresProvider — the Active-fires source is decided once,
+// at cold start (see watchWmtsActivity below), and afterward only changes via
+// the manual EFFIS/FIRMS toggle. An earlier version re-ran this engage/
+// disengage decision on every health report for the whole session, which
+// meant a flapping EFFIS backend could flip the active layer back and forth
+// automatically; the one-time cold-start check plus a plain manual toggle
+// avoids that.
 function handleEffisHealthChange(report: EffisHealthReport): void {
   currentEffisHealth = report.overall;
-  currentActiveFiresHealth = report.activeFires;
   if (report.overall === "ok") {
     dismissedEffisHealth = null;
     effisWarning.hidden = true;
   } else if (report.overall !== dismissedEffisHealth) {
     effisWarningText.innerHTML = effisWarningHtml(report.overall);
     effisWarning.hidden = false;
-  }
-
-  if (activeFiresSourceMode !== "auto") return; // user has pinned a provider — don't override their choice
-
-  if (report.activeFires === "down" && activeFiresProvider === "effis") {
-    engageFirmsFallback();
-  } else if (
-    report.activeFires !== "down" &&
-    activeFiresProvider === "firms" &&
-    (!firmsEngagedByColdStart || wmtsAppearsResponsive)
-  ) {
-    // The extra (!firmsEngagedByColdStart || wmtsAppearsResponsive) clause
-    // only matters for a switch the cold-start check triggered: that path
-    // starts with zero recorded failures (a hung request never errors, so
-    // there's nothing for the failure counter to count), so
-    // report.activeFires reads as "ok" from the very first health recheck
-    // — not because EFFIS recovered, but because nothing was ever proven
-    // broken in the first place. Disengaging on that basis alone would
-    // revert the switch within moments of it happening (confirmed by
-    // reproducing it live, not just reasoned about) — so a cold-start-
-    // triggered switch additionally requires positive proof
-    // (wmtsAppearsResponsive) before reverting. A normal failure-threshold-
-    // triggered switch doesn't need that extra proof — it already has real
-    // evidence either way — so this leaves that path's existing, tested
-    // cooldown-based recovery unchanged.
-    disengageFirmsFallback();
   }
 }
 
@@ -431,16 +436,16 @@ function refreshEffisWarningText(): void {
 // --- NASA FIRMS fallback for Active fires ---------------------------
 //
 // EFFIS's own active-fire detection is itself built on NASA FIRMS (see
-// docs/firms-migration-plan.md) — when EFFIS's WMTS pipeline specifically
-// for active fires is down (report.activeFires === "down", see
-// effisHealth.ts), switch that one layer to real FIRMS vector data instead
-// of leaving broken raster tiles on screen. EFFIS stays the default; this
-// only engages as a fallback, and only for "Active fires" — "Burnt areas"
-// and "Past fires" have no FIRMS equivalent and are untouched by this.
+// docs/firms-migration-plan.md). EFFIS stays the default; FIRMS is only
+// ever engaged automatically once, by the cold-start check in
+// watchWmtsActivity below — after that, the provider only changes via the
+// manual EFFIS/FIRMS toggle in the layers sheet. Only "Active fires" has a
+// fallback at all — "Burnt areas" and "Past fires" have no FIRMS equivalent
+// and are untouched by this.
 
-async function engageFirmsFallback(triggeredByColdStart = false): Promise<void> {
+async function engageFirmsFallback(): Promise<void> {
   activeFiresProvider = "firms";
-  firmsEngagedByColdStart = triggeredByColdStart;
+  updateActiveFiresSourceUi();
   applyModeVisibility(); // hide the broken EFFIS tiles immediately, before awaiting the fetch below
   updateLegend();
   await refreshFirmsData();
@@ -449,7 +454,7 @@ async function engageFirmsFallback(triggeredByColdStart = false): Promise<void> 
 
 function disengageFirmsFallback(): void {
   activeFiresProvider = "effis";
-  firmsEngagedByColdStart = false;
+  updateActiveFiresSourceUi();
   window.clearInterval(firmsRefreshTimer);
   firmsRefreshTimer = undefined;
   ++firmsRequestId; // invalidate any in-flight refresh so a late response can't overwrite state after we've moved on
@@ -465,69 +470,43 @@ async function refreshFirmsData(): Promise<void> {
   (map.getSource(FIRMS_SOURCE_ID) as GeoJSONSource | undefined)?.setData(data);
 }
 
-// Manual override, exposed as the Auto/EFFIS/FIRMS control in the layers
-// sheet — "auto" resumes deferring to watchEffisHealth (and re-syncs
-// immediately against the latest known health rather than waiting for the
-// next change event, so switching back to "auto" reflects reality right
-// away); "effis"/"firms" force that provider regardless of health, and
-// suppress handleEffisHealthChange/the cold-start check from overriding it.
-function setActiveFiresSourceMode(nextMode: ActiveFiresSourceMode): void {
-  activeFiresSourceMode = nextMode;
-  updateActiveFiresSourceUi();
-
-  if (nextMode === "effis") {
-    if (activeFiresProvider === "firms") disengageFirmsFallback();
-  } else if (nextMode === "firms") {
-    if (activeFiresProvider === "effis") engageFirmsFallback();
-  } else if (currentActiveFiresHealth === "down") {
-    if (activeFiresProvider === "effis") engageFirmsFallback();
-  } else if (activeFiresProvider === "firms") {
-    disengageFirmsFallback();
-  }
-}
-
 function updateActiveFiresSourceUi(): void {
-  const buttons: [ActiveFiresSourceMode, HTMLButtonElement][] = [
-    ["auto", activeFiresSourceAutoBtn],
-    ["effis", activeFiresSourceEffisBtn],
-    ["firms", activeFiresSourceFirmsBtn],
-  ];
-  for (const [mode, btn] of buttons) {
-    const isActive = mode === activeFiresSourceMode;
-    btn.classList.toggle("active", isActive);
-    btn.setAttribute("aria-pressed", String(isActive));
-  }
+  const effisActive = activeFiresProvider === "effis";
+  activeFiresSourceEffisBtn.classList.toggle("active", effisActive);
+  activeFiresSourceEffisBtn.setAttribute("aria-pressed", String(effisActive));
+  activeFiresSourceFirmsBtn.classList.toggle("active", !effisActive);
+  activeFiresSourceFirmsBtn.setAttribute("aria-pressed", String(!effisActive));
 }
 
 function updateActiveFiresSourceControlState(): void {
   const enabled = mode === "current" && activeFiresCheckbox.checked;
-  activeFiresSourceAutoBtn.disabled = !enabled;
   activeFiresSourceEffisBtn.disabled = !enabled;
   activeFiresSourceFirmsBtn.disabled = !enabled;
 }
 
-activeFiresSourceAutoBtn.addEventListener("click", () => setActiveFiresSourceMode("auto"));
-activeFiresSourceEffisBtn.addEventListener("click", () => setActiveFiresSourceMode("effis"));
-activeFiresSourceFirmsBtn.addEventListener("click", () => setActiveFiresSourceMode("firms"));
+activeFiresSourceEffisBtn.addEventListener("click", () => {
+  if (activeFiresProvider === "firms") disengageFirmsFallback();
+});
+activeFiresSourceFirmsBtn.addEventListener("click", () => {
+  if (activeFiresProvider === "effis") engageFirmsFallback();
+});
 
 // Tracks whether /api/wmts has produced *any* completed response yet
 // (success or failure — just evidence the mount is alive at all), scoped at
 // the same mount granularity effisHealth.ts's slow-response tracking
 // already uses (see its "Known unknowns"-referenced reasoning in
 // CLAUDE.md) rather than trying to isolate active-fires specifically — if
-// the mount is silent, active fires is silent too. Stays alive (not
-// disconnected) for the whole session: watchWmtsActivity below uses it once
-// for the initial cold-start decision, but handleEffisHealthChange's
-// auto-disengage also needs it on an ongoing basis (see the comment there
-// for why report.activeFires alone isn't enough).
+// the mount is silent, active fires is silent too. Only read once, by the
+// cold-start timeout below.
 let wmtsAppearsResponsive = false;
 
-// See INITIAL_LOAD_TIMEOUT_MS above for why this exists alongside
-// watchEffisHealth's own rolling-window detection: that one needs an actual
-// *error* event to count anything, so a request that just hangs forever —
-// never erroring, never resolving — wouldn't trip it for a long time, if
-// ever. This is a blunter, one-shot check specifically for that "totally
-// silent" cold start.
+// The one-time initial decision: if nothing at all has come back from
+// EFFIS's WMTS mount within INITIAL_LOAD_TIMEOUT_MS of the page loading,
+// switch Active fires to FIRMS. Runs exactly once, on a one-shot timer, at
+// startup — not on every subsequent health check — so a flapping EFFIS
+// backend later in the session can't silently flip the active layer back
+// and forth; after this fires (or doesn't), the provider only changes via
+// the manual EFFIS/FIRMS toggle above.
 function watchWmtsActivity(): void {
   const observer = new PerformanceObserver((list) => {
     for (const entry of list.getEntries()) {
@@ -539,12 +518,8 @@ function watchWmtsActivity(): void {
   observer.observe({ type: "resource", buffered: true });
 
   window.setTimeout(() => {
-    if (
-      !wmtsAppearsResponsive &&
-      activeFiresSourceMode === "auto" &&
-      activeFiresProvider === "effis"
-    ) {
-      engageFirmsFallback(true);
+    if (!wmtsAppearsResponsive && activeFiresProvider === "effis") {
+      engageFirmsFallback();
     }
   }, INITIAL_LOAD_TIMEOUT_MS);
 }
@@ -800,17 +775,66 @@ function addFirmsActiveFiresLayer(map: MaplibreMap): void {
     data: emptyCollection(),
     attribution: FIRMS_ATTRIBUTION,
   });
+
+  // VIIRS -> circles, MODIS -> triangles — the same shape-per-sensor split
+  // EFFIS's own legend depicts (legend-config.json's activeFires.shapes),
+  // now that each feature carries a `source` property to split on (see
+  // firms.ts's rowsToFeatures; "MODIS_NRT" is MODIS, everything else is one
+  // of the three VIIRS sources).
   map.addLayer({
     id: FIRMS_LAYER_ID,
     type: "circle",
     source: FIRMS_SOURCE_ID,
+    filter: ["!=", ["get", "source"], "MODIS_NRT"],
     layout: { visibility: "none" },
     paint: {
-      "circle-radius": 5,
+      "circle-radius": FIRMS_POINT_RADIUS,
       "circle-color": recencyColorExpression(),
-      "circle-stroke-width": 1,
-      "circle-stroke-color": "#000000",
     },
+  });
+
+  ensureFirmsModisIcon(map);
+  map.addLayer({
+    id: FIRMS_MODIS_LAYER_ID,
+    type: "symbol",
+    source: FIRMS_SOURCE_ID,
+    filter: ["==", ["get", "source"], "MODIS_NRT"],
+    layout: {
+      visibility: "none",
+      "icon-image": FIRMS_MODIS_ICON_ID,
+      "icon-size": (FIRMS_POINT_RADIUS * 2) / 24,
+      "icon-allow-overlap": true,
+      "icon-ignore-placement": true,
+    },
+    paint: {
+      "icon-color": recencyColorExpression(),
+    },
+  });
+}
+
+/** Draws a small filled triangle and registers it as an SDF icon so the
+ * MODIS points layer can recolor it per-feature via icon-color, the same
+ * way the VIIRS circle layer recolors via circle-color — MapLibre only
+ * supports that for images registered with sdf: true. Re-run on every
+ * basemap switch via addFirmsActiveFiresLayer, since setStyle() drops
+ * registered images along with every other custom source/layer/image. */
+function ensureFirmsModisIcon(map: MaplibreMap): void {
+  if (map.hasImage(FIRMS_MODIS_ICON_ID)) return;
+  const size = 24;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  ctx.fillStyle = "#fff";
+  ctx.beginPath();
+  ctx.moveTo(size / 2, 1);
+  ctx.lineTo(size - 1, size - 1);
+  ctx.lineTo(1, size - 1);
+  ctx.closePath();
+  ctx.fill();
+  map.addImage(FIRMS_MODIS_ICON_ID, ctx.getImageData(0, 0, size, size), {
+    sdf: true,
   });
 }
 
@@ -907,6 +931,11 @@ function applyModeVisibility() {
   }
   map.setLayoutProperty(
     FIRMS_LAYER_ID,
+    "visibility",
+    showFirmsActiveFires ? "visible" : "none",
+  );
+  map.setLayoutProperty(
+    FIRMS_MODIS_LAYER_ID,
     "visibility",
     showFirmsActiveFires ? "visible" : "none",
   );
@@ -1227,9 +1256,15 @@ function updateLegend() {
         renderActiveFiresFallback();
       }
     } else {
-      // Use WMS PNG
+      // Use WMS PNG — src is only ever assigned here, never in the HTML
+      // itself: an <img src="..."> attribute is fetched by the browser the
+      // moment it's parsed, regardless of any JS/config check afterward, so
+      // a static src would hit EFFIS's legend endpoint unconditionally even
+      // when useCustomLegend is true and the image is never shown at all.
       if (activeFiresImg) {
         activeFiresImg.style.display = "";
+        activeFiresImg.src =
+          "/api/effis?service=WMS&request=GetLegendGraphic&layer=modis.hs.week&format=image/png";
       }
       if (activeFiresFallback) {
         activeFiresFallback.hidden = true;
@@ -1342,10 +1377,15 @@ function renderActiveFiresFallback() {
     } else {
       shapeSvg = `<svg width="12" height="12" viewBox="0 0 24 24" class="legend-fallback-shape"><circle cx="12" cy="12" r="10" fill="#fff" /></svg>`;
     }
+    // FIRMS has no Sentinel-3 equivalent (see the "NASA FIRMS fallback"
+    // section in CLAUDE.md), so its VIIRS row drops the "/ SENTINEL3" half
+    // of the label that's accurate for EFFIS's own three-source coverage.
+    const label =
+      activeFiresProvider === "firms" ? item.firmsLabel : item.label;
     html += `
       <div class="legend-fallback-row">
         ${shapeSvg}
-        <span class="legend-fallback-label">${item.label}</span>
+        <span class="legend-fallback-label">${label}</span>
       </div>`;
   });
   html += `</div>`;

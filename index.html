@@ -150,13 +150,14 @@
               </svg>
             </button>
           </div>
-          <div
-            id="map-loading-indicator"
-            class="map-loading-indicator active"
-            aria-hidden="true"
-          ></div>
           <ul id="search-results" class="search-results" hidden></ul>
         </div>
+
+        <div
+          id="map-loading-indicator"
+          class="map-loading-indicator active"
+          aria-hidden="true"
+        ></div>
       </div>
 
       <div id="about-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="about-title" hidden inert>
@@ -176,12 +177,12 @@
           <div id="legend-item-active-fires" class="legend-item">
             <h4 data-i18n="active_fires">Active Fires</h4>
             <span id="legend-active-fires-provider" class="legend-provider-note" data-i18n="legend_active_fires_via_firms" hidden></span>
-            <img id="legend-img-active-fires" src="/api/effis?service=WMS&request=GetLegendGraphic&layer=modis.hs.week&format=image/png" alt="Active Fires Legend" />
+            <img id="legend-img-active-fires" alt="Active Fires Legend" />
             <div id="legend-fallback-active-fires" class="legend-fallback" hidden></div>
           </div>
           <div id="legend-item-burnt-areas" class="legend-item">
             <h4 id="legend-title-burnt-areas" data-i18n="burnt_areas">Burnt Areas</h4>
-            <img id="legend-img-burnt-areas" src="/api/effis?service=WMS&request=GetLegendGraphic&layer=modis.ba.week&format=image/png" alt="Burnt Areas Legend" />
+            <img id="legend-img-burnt-areas" alt="Burnt Areas Legend" />
             <div id="legend-fallback-burnt-areas" class="legend-fallback" hidden></div>
           </div>
         </div>
@@ -254,8 +255,7 @@
                 </span>
               </label>
               <div id="active-fires-source" class="segmented segmented-sm" role="group" data-i18n-aria-label="aria_active_fires_source" aria-label="Active fires data source">
-                <button type="button" id="active-fires-source-auto" class="segmented-btn active" aria-pressed="true" data-i18n="active_fires_source_auto">Auto</button>
-                <button type="button" id="active-fires-source-effis" class="segmented-btn" aria-pressed="false" data-i18n="active_fires_source_effis">EFFIS</button>
+                <button type="button" id="active-fires-source-effis" class="segmented-btn active" aria-pressed="true" data-i18n="active_fires_source_effis">EFFIS</button>
                 <button type="button" id="active-fires-source-firms" class="segmented-btn" aria-pressed="false" data-i18n="active_fires_source_firms">FIRMS</button>
               </div>
               <label class="detail-row">

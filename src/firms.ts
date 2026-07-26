@@ -18,10 +18,10 @@ import legendConfig from "./legend-config.json";
 // parallel to get as close to EFFIS's real coverage as possible, but a
 // fire visible only to Sentinel-3 won't appear here during a fallback.
 //
-// Renders as plain circles, not shapes-by-sensor the way the legend depicts
-// MODIS (triangle) vs VIIRS (circle) — that would need custom SDF icons in
-// a MapLibre `symbol` layer; deliberately out of scope to keep this
-// addition small.
+// Rendered shape-by-sensor to match the legend (MODIS -> triangle, VIIRS ->
+// circle) — see main.ts's addFirmsActiveFiresLayer, which splits features on
+// the `source` property set below ("MODIS_NRT" vs the three VIIRS sources)
+// across a circle layer and a symbol layer using a small SDF triangle icon.
 
 export type FirmsSource =
   | "MODIS_NRT"

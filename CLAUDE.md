@@ -359,19 +359,21 @@ every language; `effisWarningText.innerHTML` is safe here since both the
 message template and the injected link markup come from our own static
 sources, never from user input.
 
-**NASA FIRMS fallback for Active fires — engages automatically, EFFIS stays
-the default, and a manual Auto/EFFIS/FIRMS override sits in the layers
+**NASA FIRMS fallback for Active fires — engages automatically at most once,
+EFFIS stays the default, and a manual EFFIS/FIRMS toggle sits in the layers
 sheet.** EFFIS's own active-fire detection is itself built on NASA FIRMS
-(confirmed in `docs/firms-migration-plan.md`) — when `watchEffisHealth`'s
-report shows `activeFires: "down"` (see above), `main.ts` switches that one
-layer to real FIRMS data instead of leaving broken raster tiles on screen,
-and switches back once EFFIS is confirmed responsive again (see
-`wmtsAppearsResponsive` below — "the moment `activeFires` stops being
-`down`" turned out to not quite be true; keep reading). Scoped deliberately
-narrow: "Burnt areas" and "Past fires" have no
-FIRMS equivalent (FIRMS is point-hotspot data only, no burned-area/burn-scar
-product — see `docs/firms-migration-plan.md` for the full research) and are
-untouched by this regardless of their own health.
+(confirmed in `docs/firms-migration-plan.md`). The *only* automatic trigger
+is the cold-start check below, which runs once per page load; after that,
+"Active fires" only changes source via the manual toggle in the layers sheet
+— `watchEffisHealth`'s ongoing health reports (see above) drive the warning
+banner but deliberately do not re-engage or disengage FIRMS for the rest of
+the session (an earlier version did exactly that, and a flapping EFFIS
+backend made the active layer flip back and forth automatically — see "The
+manual override" below for why this was simplified to a one-time decision
+plus a plain toggle). Scoped deliberately narrow: "Burnt areas" and "Past
+fires" have no FIRMS equivalent (FIRMS is point-hotspot data only, no
+burned-area/burn-scar product — see `docs/firms-migration-plan.md` for the
+full research) and are untouched by this regardless of their own health.
 - `src/firms.ts` fetches NASA's authenticated `area/csv` endpoint (`MODIS_NRT`
   + all three separate VIIRS `SOURCE` values — FIRMS has no single
   combined-VIIRS source the way EFFIS's `viirs.hs.week` covers SNPP +
@@ -404,10 +406,22 @@ untouched by this regardless of their own health.
   both "the tier" and "the legend-row lookup key," so editing
   `legend-config.json`'s tiers/colors updates the real `circle-color`
   paint expression (`recencyColorExpression()` in `main.ts`) and the
-  legend swatches together, with no separate mapping table. Renders as
-  plain circles, not shapes-by-sensor the way the legend depicts MODIS
-  (triangle) vs VIIRS (circle) — deliberately out of scope, would need
-  custom SDF icons in a `symbol` layer.
+  legend swatches together, with no separate mapping table. Rendered
+  shape-by-sensor to match the legend (MODIS -> triangle, VIIRS -> circle):
+  `addFirmsActiveFiresLayer()` in `main.ts` splits FIRMS features into two
+  layers on each feature's `source` property (`"MODIS_NRT"` vs the three
+  VIIRS sources) — a `circle` layer for VIIRS, and a `symbol` layer for
+  MODIS using a small triangle registered via `map.addImage(..., { sdf:
+  true })` (`ensureFirmsModisIcon()`) so `icon-color` can recolor it by
+  recency tier the same way `circle-color` does for VIIRS. Both layers are
+  re-added on every basemap switch alongside the source itself (see below),
+  since `setStyle()` drops registered images too. The "VIIRS / SENTINEL3"
+  legend label that's accurate for EFFIS's own three-sensor coverage is
+  wrong for FIRMS specifically (no Sentinel-3 data here — see the
+  coverage-gap note above), so
+  `legend-config.json`'s `activeFires.shapes[].firmsLabel` gives the VIIRS
+  row a FIRMS-only override ("VIIRS") that `renderActiveFiresFallback()` in
+  `main.ts` picks when `activeFiresProvider === "firms"`.
 - Query covers all of Europe (`EUROPE_BBOX` in `firms.ts`, matching the
   bbox FIRMS's own `kml_fire_footprints` endpoint uses for its predefined
   "europe" region), not just `map.ts`'s Spain-scoped `DEFAULT_BOUNDS` — a
@@ -427,58 +441,40 @@ untouched by this regardless of their own health.
   `about_content_html` (see the "no AttributionControl" note below), not
   the GeoJSON source's inert `attribution` property.
 
-**A cold-start check exists alongside `watchEffisHealth`'s rolling-window
-detection, because the failure counter has a real blind spot: it needs an
-actual `error` event to count anything, and a request that just hangs
-forever — never resolving, never erroring — produces none.** In dev
-specifically, `/api/wmts` is a raw Vite proxy passthrough with no
-`AbortSignal.timeout` (unlike production's `api/wmts.ts`, which has one at
-15s), so a genuinely unresponsive EFFIS backend can hang indefinitely there
-with zero error events ever firing — confirmed live during testing, not
-just a theoretical gap. `watchWmtsActivity()` in `main.ts` sets a single
-`wmtsAppearsResponsive` flag the first time *any* `/api/wmts` resource
-timing entry appears (success or failure — just evidence the mount is
-alive), and a one-shot 5s timer (`INITIAL_LOAD_TIMEOUT_MS`) engages the
-FIRMS fallback if nothing has appeared by then, bypassing the normal
-failure-threshold logic entirely for this one cold-start decision.
-
-**That fix introduced a second bug, which is why disengaging now needs more
-than `report.activeFires !== "down"`.** The obvious first implementation —
-revert to EFFIS as soon as `watchEffisHealth` next reports `activeFires` as
-not-`"down"` — reverted the cold-start-triggered switch within moments of
-it happening, confirmed live, not just reasoned about. The reason: a
-cold-start-triggered switch has zero recorded failures by definition (that
-was the whole problem — nothing ever errored), so the very next periodic
-health recheck computes `activeFires: "ok"` — not because EFFIS recovered,
-but because nothing was ever proven broken in the first place, and "ok" is
-the default in the absence of evidence either way. The fix: track
-`firmsEngagedByColdStart` (set via `engageFirmsFallback(triggeredByColdStart)`)
-and require `wmtsAppearsResponsive` as an *additional* condition before
-disengaging, but only when that flag is set — see the comment on the
-disengage branch in `handleEffisHealthChange` for the full reasoning. A
-*normal*, failure-threshold-triggered switch doesn't get this extra
-requirement: it already started with real evidence of failure, and once no
-new failures occur for 20s the existing cooldown-based recovery (pruning
-the rolling window) is trusted as-is, unchanged from before this existed —
-tightening that path too would risk leaving FIRMS stuck engaged with no way
-back, since MapLibre stops requesting tiles entirely for a hidden
-(`visibility: "none"`) layer, so a genuinely-recovered EFFIS might never
-generate a new `/api/wmts` request to prove it if `wmtsAppearsResponsive`
-were required universally.
+**The cold-start check is the only automatic trigger, and it fires exactly
+once, because the failure counter has a real blind spot: it needs an actual
+`error` event to count anything, and a request that just hangs forever —
+never resolving, never erroring — produces none.** In dev specifically,
+`/api/wmts` is a raw Vite proxy passthrough with no `AbortSignal.timeout`
+(unlike production's `api/wmts.ts`, which has one at 15s), so a genuinely
+unresponsive EFFIS backend can hang indefinitely there with zero error
+events ever firing — confirmed live during testing, not just a theoretical
+gap. `watchWmtsActivity()` in `main.ts` sets a single `wmtsAppearsResponsive`
+flag the first time *any* `/api/wmts` resource timing entry appears (success
+or failure — just evidence the mount is alive), and a one-shot 5s timer
+(`INITIAL_LOAD_TIMEOUT_MS`) engages the FIRMS fallback if nothing has
+appeared by then and the provider is still EFFIS. This timer only ever runs
+once, at page load, and there is no automatic path back to EFFIS — an
+earlier version tried to auto-revert once `watchEffisHealth` next reported
+`activeFires` as not-`"down"`, but that reverted the cold-start-triggered
+switch within moments of it happening (confirmed live): a cold-start switch
+has zero recorded failures by definition — nothing ever errored — so the
+very next health recheck reads `activeFires: "ok"` simply because nothing
+was ever proven broken, not because EFFIS recovered. Rather than add more
+machinery to distinguish "actually recovered" from "never proven broken,"
+the automatic-disengage path was removed entirely: after the one-time
+cold-start decision, "Active fires" only changes source via the manual
+toggle described next.
 
 **The manual override** (`#active-fires-source` in `index.html`, styled via
 `.segmented-sm` — a smaller variant of the existing `.segmented` control
-used for the Current/Past fires toggle) is a 3-way Auto/EFFIS/FIRMS choice,
-not a plain 2-way switch — deliberately, since a 2-way EFFIS/FIRMS toggle
-would be ambiguous about whether picking "EFFIS" while it's confirmed down
-should keep getting silently overridden back to FIRMS by the automatic
-logic. `activeFiresSourceMode` (`"auto" | "effis" | "firms"`) is checked at
-the top of `handleEffisHealthChange` and inside `watchWmtsActivity`'s
-timeout — anything other than `"auto"` short-circuits both, so a manual pin
-is never overridden by either automatic path. Picking `"auto"` re-syncs
-immediately against `currentActiveFiresHealth` (the latest known
-per-group health) rather than waiting for the next `watchEffisHealth`
-change event, so the control's effect is visible right away. Disabled
+used for the Current/Past fires toggle) is a plain 2-way EFFIS/FIRMS choice
+— there is no "Auto" option. `activeFiresProvider` (`"effis" | "firms"`) is
+the single source of truth for which data is showing; the cold-start check
+above can set it once automatically, and either toggle button
+(`activeFiresSourceEffisBtn`/`activeFiresSourceFirmsBtn`) can set it
+manually at any time thereafter, but nothing ever overrides a manual choice
+— there's no ongoing automatic logic left to conflict with it. Disabled
 (`updateActiveFiresSourceControlState()`, called from `applyModeVisibility`)
 whenever "Active fires" itself is off or the app is in "Past fires" mode,
 since the choice is meaningless in either case.
@@ -531,6 +527,34 @@ update them on its own until the pre-scripts rerun.
 "maplibre-gl"` (the v4-era pattern) fails to compile — use named imports
 (`import { Map, NavigationControl, Popup, ... } from "maplibre-gl"`).
 
+**MapLibre's `'idle'` event can get stuck forever once a raster tile source
+enters a sustained error/retry loop — confirmed live, not just suspected,
+against EFFIS's own real flakiness.** `main.ts`'s `#map-loading-indicator`
+spinner is driven by `map.on('dataloading', ...)` / `map.on('idle', ...)` —
+show on the former, hide (after a 150ms debounce) on the latter. Traced the
+raw event stream directly (`map.on('error'/'dataloading'/'data'/'idle', ...)`)
+against a session where EFFIS's `burnt-areas-modis` WMTS tiles were
+genuinely failing: tiles errored repeatedly, `map.loaded()` still reported
+`true` throughout, but **zero `'idle'` events fired at all** for the rest of
+the trace — MapLibre kept re-entering a loading state for retries faster
+than it ever landed on a clean "everything settled" snapshot, so `'idle'`
+never got a chance to fire. Without a ceiling, the spinner would then spin
+forever even though nothing is actually happening — this was reported as
+"the spinner just hangs," and reproduced by blocking `/api/wmts` entirely
+(a route that never resolves at all reproduces the same stuck-forever
+state as a source that errors-and-retries forever). Fixed with
+`MAX_LOADING_INDICATOR_MS` (15s) in `setMapLoading()`: a safety timer armed
+only on the *first* `'dataloading'` of a new loading streak (an `=== undefined`
+guard prevents subsequent `'dataloading'` events from re-arming it, which
+would just measure "time since the most recent event" and never actually
+fire during exactly the retry loop this exists to catch) force-hides the
+indicator if `'idle'` hasn't shown up by then — same "don't trust EFFIS's
+lifecycle to behave, always have a timeout" principle as `REQUEST_TIMEOUT_MS`
+elsewhere. Verified this isn't just theoretical: re-running the exact same
+check against the live (unblocked) dev session showed the real backend
+hitting this same condition and the safety net rescuing it, both landing at
+the same 15s mark.
+
 ## Key files
 
 - `src/map.ts` — MapLibre init, OpenFreeMap basemap reduced to white +
@@ -557,7 +581,7 @@ update them on its own until the pre-scripts rerun.
   behavior, the EFFIS health warning banner (`handleEffisHealthChange`),
   and the NASA FIRMS fallback orchestration (`engageFirmsFallback`/
   `disengageFirmsFallback`/`refreshFirmsData`, the `watchWmtsActivity`
-  cold-start check, and the manual Auto/EFFIS/FIRMS override) together.
+  cold-start check, and the manual EFFIS/FIRMS toggle) together.
 - `index.html` / `src/style.css` — toolbar markup/styling. **No
   `AttributionControl`** — `map.ts` constructs the `Map` with
   `attributionControl: false`, so despite each source's `attribution`
@@ -571,7 +595,28 @@ update them on its own until the pre-scripts rerun.
   fetch-result/error message can't wrap and inflate the toolbar's height,
   especially on narrow viewports; `#toolbar` uses `flex-wrap: wrap` so its
   growing control count still degrades gracefully on mobile instead of
-  overflowing horizontally.
+  overflowing horizontally. `#map-loading-indicator` is centered on `#map`
+  itself (a direct child, not nested in `.search-container` — it used to be,
+  tucked into a toolbar corner, easy to miss) — `top/left: 50%` plus
+  `transform: translate(-50%, -50%) rotate(...)`, where the base rule's
+  `rotate(0deg)` isn't decorative: it keeps the transform's function-list
+  shape identical to the `@keyframes` rule's `translate(...) rotate(360deg)`,
+  so the animation interpolates the rotation smoothly instead of the
+  centering offset itself jumping every cycle. The two legend `<img>` tags
+  (`#legend-img-active-fires`/`#legend-img-burnt-areas`) deliberately have
+  **no `src` attribute in the HTML** — a static `src` is fetched by the
+  browser the instant it's parsed, regardless of any JS/config check
+  afterward, so it would hit EFFIS's `GetLegendGraphic` endpoint
+  unconditionally even though `config.json`'s `"legendType": "custom"` means
+  the image is never actually shown; `main.ts`'s `updateLegend()` only
+  assigns `.src` inside the `!useCustomLegend` branch. Confirmed this wasn't
+  just wasteful but actively harmful: two permanently-pending requests to a
+  hanging EFFIS endpoint were enough on their own to reproduce the
+  `'idle'`-never-fires spinner bug above, plausibly by exhausting the
+  browser's small per-origin connection pool (everything in this app is
+  same-origin by design, see the proxy note below) — removing them didn't
+  fully fix that bug alone, but it's a real contributing factor worth
+  knowing about independent of the safety-timeout fix.
 - `api/firms.ts` — the NASA FIRMS proxy, alongside `api/effis.ts`/
   `api/wmts.ts` but structurally different from both (see the "NASA FIRMS
   fallback" section above for why) — not a passthrough, since FIRMS's

@@ -36,10 +36,14 @@ const translations: Record<Language, Record<string, string>> = {
     popup_burnt_area: "Burnt area",
     popup_country: "Country",
     unknown: "Unknown",
-    error_timeout: "EFFIS did not respond in time. The service may be overloaded — try again shortly.",
-    error_reachability: "Could not reach EFFIS ({error}). The service may be temporarily unavailable — try again shortly.",
-    error_http: "EFFIS returned an error (HTTP {status}). The service may be temporarily unavailable — try again shortly.{detail}",
-    error_parse: "Received a response from EFFIS but couldn't parse it as shapefile data ({error}).",
+    error_timeout:
+      "EFFIS did not respond in time. The service may be overloaded — try again shortly.",
+    error_reachability:
+      "Could not reach EFFIS ({error}). The service may be temporarily unavailable — try again shortly.",
+    error_http:
+      "EFFIS returned an error (HTTP {status}). The service may be temporarily unavailable — try again shortly.{detail}",
+    error_parse:
+      "Received a response from EFFIS but couldn't parse it as shapefile data ({error}).",
     error_load_failed: "Failed to load fire data.",
     aria_compass: "Reset orientation to North",
     aria_measure_distance: "Measure distance",
@@ -51,7 +55,8 @@ const translations: Record<Language, Record<string, string>> = {
     aria_change_language: "Change language",
     aria_about: "About",
     about_title: "About Forest Fires Map",
-    about_content_html: "<p>This application visualizes forest fire data across Europe in real-time and historically, using data from the European Forest Fire Information System (EFFIS).</p><p><strong>Sources:</strong></p><ul><li>Active Fires & Burnt Areas: <a href=\"https://effis.jrc.ec.europa.eu\" target=\"_blank\" rel=\"noopener\">EFFIS</a> (Copernicus Emergency Management Service)</li><li>Active Fires fallback: <a href=\"https://firms.modaps.eosdis.nasa.gov\" target=\"_blank\" rel=\"noopener\">NASA FIRMS</a> (used automatically if EFFIS is temporarily unavailable)</li><li>Background maps: <a href=\"https://openfreemap.org\" target=\"_blank\" rel=\"noopener\">OpenFreeMap</a>, OpenStreetMap contributors, and <a href=\"https://www.esri.com/\" target=\"_blank\" rel=\"noopener\">Esri</a> World Imagery</li></ul><p class=\"about-dedication\">Dedicated to the memory of those who lost their lives in wildfires</p>",
+    about_content_html:
+      '<p>This application visualizes forest fire data across Europe in real-time and historically, using data from the European Forest Fire Information System (EFFIS).</p><p><strong>Sources:</strong></p><ul><li>Active Fires & Burnt Areas: <a href="https://effis.jrc.ec.europa.eu" target="_blank" rel="noopener">EFFIS</a> (Copernicus Emergency Management Service)</li><li>Active Fires fallback: <a href="https://firms.modaps.eosdis.nasa.gov" target="_blank" rel="noopener">NASA FIRMS</a> (used automatically if EFFIS is temporarily unavailable)</li><li>Background maps: <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a>, OpenStreetMap contributors, and <a href="https://www.esri.com/" target="_blank" rel="noopener">Esri</a> World Imagery</li></ul><p class="about-dedication">Dedicated to the memory of those who lost their lives in wildfires</p>',
     aria_legend: "Map Legend",
     legend_title: "Legend",
     legend_up_to_6_hours: "≤6 h",
@@ -62,11 +67,12 @@ const translations: Record<Language, Record<string, string>> = {
     legend_borders: "Country Borders",
     legend_active_fires_via_firms: "via NASA FIRMS",
     aria_active_fires_source: "Active fires data source",
-    active_fires_source_auto: "Auto",
-    active_fires_source_effis: "EFFIS",
-    active_fires_source_firms: "FIRMS",
-    effis_status_slow: "{effisLinkOpen}EFFIS{effisLinkClose} is responding slowly right now — some fire data may take longer to load.",
-    effis_status_down: "{effisLinkOpen}EFFIS{effisLinkClose} appears to be down or unreachable right now — fire data may be missing or outdated."
+    active_fires_source_effis: "EFFIS (EU)",
+    active_fires_source_firms: "FIRMS (NASA)",
+    effis_status_slow:
+      "{effisLinkOpen}EFFIS{effisLinkClose} is responding slowly right now — some fire data may take longer to load.",
+    effis_status_down:
+      "{effisLinkOpen}EFFIS{effisLinkClose} appears to be down or unreachable right now — fire data may be missing or outdated.",
   },
   es: {
     app_title: "Mapa de incendios forestales",
@@ -94,7 +100,8 @@ const translations: Record<Language, Record<string, string>> = {
     place_names: "Nombres de lugares",
     loading_style: "Cargando estilo del mapa…",
     error_basemap: "Error al cargar ese mapa base.",
-    live_fires_status: "Mostrando incendios activos y áreas quemadas en tiempo real de EFFIS.",
+    live_fires_status:
+      "Mostrando incendios activos y áreas quemadas en tiempo real de EFFIS.",
     loading_year_fires: "Cargando incendios de {year}…",
     no_burnt_areas: "No se registraron áreas quemadas para {year}.",
     fires_shown_singular: "Se muestra {count} incendio.",
@@ -103,10 +110,14 @@ const translations: Record<Language, Record<string, string>> = {
     popup_burnt_area: "Área quemada",
     popup_country: "País",
     unknown: "Desconocido",
-    error_timeout: "EFFIS no respondió a tiempo. El servicio puede estar sobrecargado; inténtelo de nuevo en breve.",
-    error_reachability: "No se pudo conectar con EFFIS ({error}). El servicio puede estar temporalmente no disponible; inténtelo de nuevo en breve.",
-    error_http: "EFFIS devolvió un error (HTTP {status}). El servicio puede estar temporalmente no disponible; inténtelo de nuevo en breve.{detail}",
-    error_parse: "Se recibió una respuesta de EFFIS pero no se pudo analizar como datos de shapefile ({error}).",
+    error_timeout:
+      "EFFIS no respondió a tiempo. El servicio puede estar sobrecargado; inténtelo de nuevo en breve.",
+    error_reachability:
+      "No se pudo conectar con EFFIS ({error}). El servicio puede estar temporalmente no disponible; inténtelo de nuevo en breve.",
+    error_http:
+      "EFFIS devolvió un error (HTTP {status}). El servicio puede estar temporalmente no disponible; inténtelo de nuevo en breve.{detail}",
+    error_parse:
+      "Se recibió una respuesta de EFFIS pero no se pudo analizar como datos de shapefile ({error}).",
     error_load_failed: "Error al cargar los datos de los incendios.",
     aria_compass: "Restablecer orientación al Norte",
     aria_measure_distance: "Medir distancia",
@@ -118,7 +129,8 @@ const translations: Record<Language, Record<string, string>> = {
     aria_change_language: "Cambiar idioma",
     aria_about: "Acerca de",
     about_title: "Acerca de Mapa de incendios forestales",
-    about_content_html: "<p>Esta aplicación visualiza datos de incendios forestales en Europa en tiempo real e históricos, utilizando datos del Sistema Europeo de Información sobre Incendios Forestales (EFFIS).</p><p><strong>Fuentes:</strong></p><ul><li>Incendios activos y áreas quemadas: <a href=\"https://effis.jrc.ec.europa.eu\" target=\"_blank\" rel=\"noopener\">EFFIS</a> (Copernicus Emergency Management Service)</li><li>Alternativa para incendios activos: <a href=\"https://firms.modaps.eosdis.nasa.gov\" target=\"_blank\" rel=\"noopener\">NASA FIRMS</a> (se usa automáticamente si EFFIS no está disponible temporalmente)</li><li>Mapas de fondo: <a href=\"https://openfreemap.org\" target=\"_blank\" rel=\"noopener\">OpenFreeMap</a>, colaboradores de OpenStreetMap y <a href=\"https://www.esri.com/\" target=\"_blank\" rel=\"noopener\">Esri</a> World Imagery</li></ul><p class=\"about-dedication\">Dedicado a la memoria de quienes perdieron la vida en incendios forestales</p>",
+    about_content_html:
+      '<p>Esta aplicación visualiza datos de incendios forestales en Europa en tiempo real e históricos, utilizando datos del Sistema Europeo de Información sobre Incendios Forestales (EFFIS).</p><p><strong>Fuentes:</strong></p><ul><li>Incendios activos y áreas quemadas: <a href="https://effis.jrc.ec.europa.eu" target="_blank" rel="noopener">EFFIS</a> (Copernicus Emergency Management Service)</li><li>Alternativa para incendios activos: <a href="https://firms.modaps.eosdis.nasa.gov" target="_blank" rel="noopener">NASA FIRMS</a> (se usa automáticamente si EFFIS no está disponible temporalmente)</li><li>Mapas de fondo: <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a>, colaboradores de OpenStreetMap y <a href="https://www.esri.com/" target="_blank" rel="noopener">Esri</a> World Imagery</li></ul><p class="about-dedication">Dedicado a la memoria de quienes perdieron la vida en incendios forestales</p>',
     aria_legend: "Leyenda del mapa",
     legend_title: "Leyenda",
     legend_up_to_6_hours: "≤6 h",
@@ -129,11 +141,12 @@ const translations: Record<Language, Record<string, string>> = {
     legend_borders: "Límites nacionales",
     legend_active_fires_via_firms: "vía NASA FIRMS",
     aria_active_fires_source: "Fuente de datos de incendios activos",
-    active_fires_source_auto: "Auto",
     active_fires_source_effis: "EFFIS",
     active_fires_source_firms: "FIRMS",
-    effis_status_slow: "{effisLinkOpen}EFFIS{effisLinkClose} está respondiendo lentamente en este momento — algunos datos de incendios pueden tardar más en cargarse.",
-    effis_status_down: "{effisLinkOpen}EFFIS{effisLinkClose} parece estar caído o inaccesible en este momento — los datos de incendios pueden faltar o estar desactualizados."
+    effis_status_slow:
+      "{effisLinkOpen}EFFIS{effisLinkClose} está respondiendo lentamente en este momento — algunos datos de incendios pueden tardar más en cargarse.",
+    effis_status_down:
+      "{effisLinkOpen}EFFIS{effisLinkClose} parece estar caído o inaccesible en este momento — los datos de incendios pueden faltar o estar desactualizados.",
   },
   de: {
     app_title: "Waldbrandkarte",
@@ -161,7 +174,8 @@ const translations: Record<Language, Record<string, string>> = {
     place_names: "Ortsnamen",
     loading_style: "Kartenstil wird geladen…",
     error_basemap: "Grundkarte konnte nicht geladen werden.",
-    live_fires_status: "Zeigt aktuelle aktive Brände und verbrannte Flächen von EFFIS.",
+    live_fires_status:
+      "Zeigt aktuelle aktive Brände und verbrannte Flächen von EFFIS.",
     loading_year_fires: "Brände für {year} werden geladen…",
     no_burnt_areas: "Keine verbrannten Flächen für {year} aufgezeichnet.",
     fires_shown_singular: "{count} Brand angezeigt.",
@@ -170,14 +184,19 @@ const translations: Record<Language, Record<string, string>> = {
     popup_burnt_area: "Verbrannte Fläche",
     popup_country: "Land",
     unknown: "Unbekannt",
-    error_timeout: "EFFIS hat nicht rechtzeitig geantwortet. Der Dienst ist möglicherweise überlastet – versuchen Sie es bald noch einmal.",
-    error_reachability: "EFFIS konnte nicht erreicht werden ({error}). Der Dienst ist möglicherweise vorübergehend nicht verfügbar – versuchen Sie es bald noch einmal.",
-    error_http: "EFFIS hat einen Fehler zurückgegeben (HTTP {status}). Der Dienst ist möglicherweise vorübergehend nicht verfügbar – versuchen Sie es bald noch einmal.{detail}",
-    error_parse: "Antwort von EFFIS empfangen, konnte aber nicht als Shapefile-Daten analysiert werden ({error}).",
+    error_timeout:
+      "EFFIS hat nicht rechtzeitig geantwortet. Der Dienst ist möglicherweise überlastet – versuchen Sie es bald noch einmal.",
+    error_reachability:
+      "EFFIS konnte nicht erreicht werden ({error}). Der Dienst ist möglicherweise vorübergehend nicht verfügbar – versuchen Sie es bald noch einmal.",
+    error_http:
+      "EFFIS hat einen Fehler zurückgegeben (HTTP {status}). Der Dienst ist möglicherweise vorübergehend nicht verfügbar – versuchen Sie es bald noch einmal.{detail}",
+    error_parse:
+      "Antwort von EFFIS empfangen, konnte aber nicht als Shapefile-Daten analysiert werden ({error}).",
     error_load_failed: "Feuerdaten konnten nicht geladen werden.",
     aria_compass: "Ausrichtung nach Norden zurücksetzen",
     aria_measure_distance: "Entfernung messen",
-    measure_choose_start: "Klicken Sie auf die Karte, um einen Startpunkt zu wählen",
+    measure_choose_start:
+      "Klicken Sie auf die Karte, um einen Startpunkt zu wählen",
     measure_choose_end: "Klicken Sie auf einen zweiten Punkt",
     measure_distance: "Entfernung: {distance}",
     search_placeholder: "Nach einem Ort suchen...",
@@ -185,7 +204,8 @@ const translations: Record<Language, Record<string, string>> = {
     aria_change_language: "Sprache ändern",
     aria_about: "Über uns",
     about_title: "Über Waldbrandkarte",
-    about_content_html: "<p>Diese Anwendung visualisiert Echtzeit- und historische Waldbranddaten in ganz Europa unter Verwendung von Daten des Europäischen Waldbrandinformationssystems (EFFIS).</p><p><strong>Quellen:</strong></p><ul><li>Aktive Brände & Verbrannte Flächen: <a href=\"https://effis.jrc.ec.europa.eu\" target=\"_blank\" rel=\"noopener\">EFFIS</a> (Copernicus Emergency Management Service)</li><li>Ausweichquelle für aktive Brände: <a href=\"https://firms.modaps.eosdis.nasa.gov\" target=\"_blank\" rel=\"noopener\">NASA FIRMS</a> (wird automatisch verwendet, wenn EFFIS vorübergehend nicht verfügbar ist)</li><li>Hintergrundkarten: <a href=\"https://openfreemap.org\" target=\"_blank\" rel=\"noopener\">OpenFreeMap</a>, OpenStreetMap-Mitwirkende und <a href=\"https://www.esri.com/\" target=\"_blank\" rel=\"noopener\">Esri</a> World Imagery</li></ul><p class=\"about-dedication\">Gewidmet dem Gedenken an diejenigen, die bei Waldbränden ihr Leben verloren haben</p>",
+    about_content_html:
+      '<p>Diese Anwendung visualisiert Echtzeit- und historische Waldbranddaten in ganz Europa unter Verwendung von Daten des Europäischen Waldbrandinformationssystems (EFFIS).</p><p><strong>Quellen:</strong></p><ul><li>Aktive Brände & Verbrannte Flächen: <a href="https://effis.jrc.ec.europa.eu" target="_blank" rel="noopener">EFFIS</a> (Copernicus Emergency Management Service)</li><li>Ausweichquelle für aktive Brände: <a href="https://firms.modaps.eosdis.nasa.gov" target="_blank" rel="noopener">NASA FIRMS</a> (wird automatisch verwendet, wenn EFFIS vorübergehend nicht verfügbar ist)</li><li>Hintergrundkarten: <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a>, OpenStreetMap-Mitwirkende und <a href="https://www.esri.com/" target="_blank" rel="noopener">Esri</a> World Imagery</li></ul><p class="about-dedication">Gewidmet dem Gedenken an diejenigen, die bei Waldbränden ihr Leben verloren haben</p>',
     aria_legend: "Legende",
     legend_title: "Legende",
     legend_up_to_6_hours: "≤6 Std.",
@@ -196,11 +216,12 @@ const translations: Record<Language, Record<string, string>> = {
     legend_borders: "Landesgrenzen",
     legend_active_fires_via_firms: "über NASA FIRMS",
     aria_active_fires_source: "Datenquelle für aktive Brände",
-    active_fires_source_auto: "Auto",
     active_fires_source_effis: "EFFIS",
     active_fires_source_firms: "FIRMS",
-    effis_status_slow: "{effisLinkOpen}EFFIS{effisLinkClose} reagiert derzeit langsam — einige Brandinformationen können länger zum Laden benötigen.",
-    effis_status_down: "{effisLinkOpen}EFFIS{effisLinkClose} scheint derzeit nicht erreichbar zu sein — Brandinformationen können fehlen oder veraltet sein."
+    effis_status_slow:
+      "{effisLinkOpen}EFFIS{effisLinkClose} reagiert derzeit langsam — einige Brandinformationen können länger zum Laden benötigen.",
+    effis_status_down:
+      "{effisLinkOpen}EFFIS{effisLinkClose} scheint derzeit nicht erreichbar zu sein — Brandinformationen können fehlen oder veraltet sein.",
   },
   fr: {
     app_title: "Carte des incendies de forêt",
@@ -228,7 +249,8 @@ const translations: Record<Language, Record<string, string>> = {
     place_names: "Noms de lieux",
     loading_style: "Chargement du style de carte…",
     error_basemap: "Échec du chargement de cette carte de base.",
-    live_fires_status: "Affichage des incendies actifs et des zones brûlées en temps réel d'EFFIS.",
+    live_fires_status:
+      "Affichage des incendies actifs et des zones brûlées en temps réel d'EFFIS.",
     loading_year_fires: "Chargement des incendies de {year}…",
     no_burnt_areas: "Aucune zone brûlée enregistrée pour {year}.",
     fires_shown_singular: "{count} incendie affiché.",
@@ -237,14 +259,19 @@ const translations: Record<Language, Record<string, string>> = {
     popup_burnt_area: "Zone brûlée",
     popup_country: "Pays",
     unknown: "Inconnu",
-    error_timeout: "EFFIS n'a pas répondu à temps. Le service est peut-être surchargé – réessayez bientôt.",
-    error_reachability: "Impossible de joindre EFFIS ({error}). Le service est peut-être temporairement indisponible – réessayez bientôt.",
-    error_http: "EFFIS a renvoyé une erreur (HTTP {status}). Le service est peut-être temporairement indisponible – réessayez bientôt.{detail}",
-    error_parse: "Réponse d'EFFIS reçue mais impossible de l'analyser comme des données shapefile ({error}).",
+    error_timeout:
+      "EFFIS n'a pas répondu à temps. Le service est peut-être surchargé – réessayez bientôt.",
+    error_reachability:
+      "Impossible de joindre EFFIS ({error}). Le service est peut-être temporairement indisponible – réessayez bientôt.",
+    error_http:
+      "EFFIS a renvoyé une erreur (HTTP {status}). Le service est peut-être temporairement indisponible – réessayez bientôt.{detail}",
+    error_parse:
+      "Réponse d'EFFIS reçue mais impossible de l'analyser comme des données shapefile ({error}).",
     error_load_failed: "Échec du chargement des données sur les incendies.",
     aria_compass: "Réinitialiser l'orientation vers le Nord",
     aria_measure_distance: "Mesurer une distance",
-    measure_choose_start: "Cliquez sur la carte pour choisir un point de départ",
+    measure_choose_start:
+      "Cliquez sur la carte pour choisir un point de départ",
     measure_choose_end: "Cliquez sur un deuxième point",
     measure_distance: "Distance : {distance}",
     search_placeholder: "Rechercher un lieu...",
@@ -252,7 +279,8 @@ const translations: Record<Language, Record<string, string>> = {
     aria_change_language: "Changer de langue",
     aria_about: "À propos",
     about_title: "À propos de la Carte des incendies de forêt",
-    about_content_html: "<p>Cette application visualise les données sur les incendies de forêt en Europe en temps réel et historiquement, à l'aide des données du Système européen d'information sur les incendies de forêt (EFFIS).</p><p><strong>Sources :</strong></p><ul><li>Incendies actifs et zones brûlées : <a href=\"https://effis.jrc.ec.europa.eu\" target=\"_blank\" rel=\"noopener\">EFFIS</a> (Copernicus Emergency Management Service)</li><li>Solution de repli pour les incendies actifs : <a href=\"https://firms.modaps.eosdis.nasa.gov\" target=\"_blank\" rel=\"noopener\">NASA FIRMS</a> (utilisée automatiquement si EFFIS est temporairement indisponible)</li><li>Cartes de fond : <a href=\"https://openfreemap.org\" target=\"_blank\" rel=\"noopener\">OpenFreeMap</a>, contributeurs d'OpenStreetMap et <a href=\"https://www.esri.com/\" target=\"_blank\" rel=\"noopener\">Esri</a> World Imagery</li></ul><p class=\"about-dedication\">Dédié à la mémoire de celles et ceux qui ont perdu la vie dans des incendies de forêt</p>",
+    about_content_html:
+      '<p>Cette application visualise les données sur les incendies de forêt en Europe en temps réel et historiquement, à l\'aide des données du Système européen d\'information sur les incendies de forêt (EFFIS).</p><p><strong>Sources :</strong></p><ul><li>Incendies actifs et zones brûlées : <a href="https://effis.jrc.ec.europa.eu" target="_blank" rel="noopener">EFFIS</a> (Copernicus Emergency Management Service)</li><li>Solution de repli pour les incendies actifs : <a href="https://firms.modaps.eosdis.nasa.gov" target="_blank" rel="noopener">NASA FIRMS</a> (utilisée automatiquement si EFFIS est temporairement indisponible)</li><li>Cartes de fond : <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a>, contributeurs d\'OpenStreetMap et <a href="https://www.esri.com/" target="_blank" rel="noopener">Esri</a> World Imagery</li></ul><p class="about-dedication">Dédié à la mémoire de celles et ceux qui ont perdu la vie dans des incendies de forêt</p>',
     aria_legend: "Légende",
     legend_title: "Légende",
     legend_up_to_6_hours: "≤6 h",
@@ -263,11 +291,12 @@ const translations: Record<Language, Record<string, string>> = {
     legend_borders: "Frontières nationales",
     legend_active_fires_via_firms: "via NASA FIRMS",
     aria_active_fires_source: "Source de données des incendies actifs",
-    active_fires_source_auto: "Auto",
     active_fires_source_effis: "EFFIS",
     active_fires_source_firms: "FIRMS",
-    effis_status_slow: "{effisLinkOpen}EFFIS{effisLinkClose} répond actuellement lentement — certaines données sur les incendies peuvent mettre plus de temps à se charger.",
-    effis_status_down: "{effisLinkOpen}EFFIS{effisLinkClose} semble actuellement hors service ou inaccessible — les données sur les incendies peuvent être manquantes ou obsolètes."
+    effis_status_slow:
+      "{effisLinkOpen}EFFIS{effisLinkClose} répond actuellement lentement — certaines données sur les incendies peuvent mettre plus de temps à se charger.",
+    effis_status_down:
+      "{effisLinkOpen}EFFIS{effisLinkClose} semble actuellement hors service ou inaccessible — les données sur les incendies peuvent être manquantes ou obsolètes.",
   },
 };
 
@@ -289,7 +318,10 @@ export function setLanguage(lang: Language): void {
   initTranslations();
 }
 
-export function t(key: string, variables?: Record<string, string | number>): string {
+export function t(
+  key: string,
+  variables?: Record<string, string | number>,
+): string {
   const dictionary = translations[currentLanguage] || translations.en;
   let message = dictionary[key] || translations.en[key] || key;
 

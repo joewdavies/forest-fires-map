@@ -605,7 +605,7 @@ body {
 }
 
 /* A visually-subordinate variant for a control nested under a detail-row
-   (e.g. "Active fires" source Auto/EFFIS/FIRMS), rather than a top-level
+   (e.g. "Active fires" source EFFIS/FIRMS), rather than a top-level
    choice like the Current/Past fires mode toggle. */
 .segmented-sm {
   margin: 0.4rem 0 0.6rem;
@@ -775,20 +775,29 @@ body {
   height: 18px;
 }
 
+/* Centered on the map itself (not tucked into a toolbar corner) so it's
+   hard to miss — this is the only persistent indicator that fire/tile data
+   is actively loading, and a small corner spinner was easy to overlook. */
 .map-loading-indicator {
   position: absolute;
-  top: calc(100% + 8px);
-  right: 9px;
-  width: 22px;
-  height: 22px;
-  border: 3px solid rgba(255, 255, 255, 0.4);
+  top: 50%;
+  left: 50%;
+  width: 40px;
+  height: 40px;
+  border: 4px solid rgba(255, 255, 255, 0.4);
   border-top-color: #e25822;
   border-radius: 50%;
   background: rgba(27, 27, 27, 0.72);
-  box-shadow: 0 0 0 4px rgba(27, 27, 27, 0.72);
+  box-shadow: 0 0 0 6px rgba(27, 27, 27, 0.72);
   opacity: 0;
   pointer-events: none;
+  z-index: 16;
   transition: opacity 0.15s ease;
+  /* translate(-50%, -50%) does the centering; rotate(0deg) here (rather
+     than omitting it) keeps this transform's function list the same shape
+     as the keyframe's below, so the animation interpolates the rotation
+     smoothly instead of the centering offset itself jumping mid-spin. */
+  transform: translate(-50%, -50%) rotate(0deg);
   animation: map-loading-spin 0.75s linear infinite;
 }
 
@@ -798,7 +807,7 @@ body {
 
 @keyframes map-loading-spin {
   to {
-    transform: rotate(360deg);
+    transform: translate(-50%, -50%) rotate(360deg);
   }
 }
 
@@ -906,10 +915,6 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-  }
-
-  .search-container:not(.expanded) .map-loading-indicator {
-    right: 11px;
   }
 }
 

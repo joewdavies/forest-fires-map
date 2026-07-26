@@ -7,8 +7,8 @@
       {"color": "#FF7F00", "labelKey": "legend_last_7_days"}
     ],
     "shapes": [
-      {"shape": "triangle", "label": "MODIS"},
-      {"shape": "circle", "label": "VIIRS / SENTINEL3"}
+      {"shape": "triangle", "label": "MODIS", "firmsLabel": "MODIS"},
+      {"shape": "circle", "label": "VIIRS / SENTINEL3", "firmsLabel": "VIIRS"}
     ]
   },
   "burntAreas": {
