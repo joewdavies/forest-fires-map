@@ -67,6 +67,7 @@ const translations: Record<Language, Record<string, string>> = {
     legend_borders: "Country Borders",
     legend_active_fires_via_firms: "via NASA FIRMS",
     aria_active_fires_source: "Active fires data source",
+    active_fires_source_label: "Data source",
     active_fires_source_effis: "EFFIS (EU)",
     active_fires_source_firms: "FIRMS (NASA)",
     effis_status_slow:
@@ -141,6 +142,7 @@ const translations: Record<Language, Record<string, string>> = {
     legend_borders: "Límites nacionales",
     legend_active_fires_via_firms: "vía NASA FIRMS",
     aria_active_fires_source: "Fuente de datos de incendios activos",
+    active_fires_source_label: "Fuente de datos",
     active_fires_source_effis: "EFFIS",
     active_fires_source_firms: "FIRMS",
     effis_status_slow:
@@ -216,6 +218,7 @@ const translations: Record<Language, Record<string, string>> = {
     legend_borders: "Landesgrenzen",
     legend_active_fires_via_firms: "über NASA FIRMS",
     aria_active_fires_source: "Datenquelle für aktive Brände",
+    active_fires_source_label: "Datenquelle",
     active_fires_source_effis: "EFFIS",
     active_fires_source_firms: "FIRMS",
     effis_status_slow:
@@ -291,6 +294,7 @@ const translations: Record<Language, Record<string, string>> = {
     legend_borders: "Frontières nationales",
     legend_active_fires_via_firms: "via NASA FIRMS",
     aria_active_fires_source: "Source de données des incendies actifs",
+    active_fires_source_label: "Source de données",
     active_fires_source_effis: "EFFIS",
     active_fires_source_firms: "FIRMS",
     effis_status_slow:
