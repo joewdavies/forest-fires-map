@@ -27,7 +27,7 @@ const translations: Record<Language, Record<string, string>> = {
     place_names: "Place names",
     loading_style: "Loading map style…",
     error_basemap: "Failed to load that basemap.",
-    live_fires_status: "Showing live active fires and burnt areas from EFFIS.",
+    live_fires_status: "Showing live active fires and burnt areas.",
     loading_year_fires: "Loading {year} fires…",
     no_burnt_areas: "No burnt areas recorded for {year}.",
     fires_shown_singular: "{count} fire shown.",

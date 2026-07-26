@@ -73,10 +73,10 @@ const FIRMS_MODIS_ICON_ID = "firms-modis-triangle";
 // Smoothly scale FIRMS markers with zoom. Each pair is [zoom, radius in px];
 // both VIIRS circles and MODIS triangles derive their size from these stops.
 const FIRMS_POINT_RADIUS_STOPS = [
-  [3, 2],
-  [6, 3],
-  [10, 4],
-  [14, 5],
+  [3, 1],
+  [6, 2],
+  [10, 2],
+  [14, 3],
 ] as const;
 const FIRMS_REFRESH_INTERVAL_MS = 15 * 60 * 1000;
 // The rolling-window "down" threshold in effisHealth.ts (4 failures/20s) is
