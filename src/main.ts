@@ -5,6 +5,7 @@ import {
   setLanguage,
   type Language,
 } from "./i18n";
+import { inject } from "@vercel/analytics";
 import "./style.css";
 import legendConfig from "./legend-config.json";
 import config from "../config.json";
@@ -38,6 +39,8 @@ import {
   getProvince,
 } from "./effis";
 import { watchEffisHealth, type EffisHealth } from "./effisHealth";
+
+inject();
 
 const FIRE_SOURCE_ID = "fires";
 const FIRE_FILL_LAYER = "fires-fill";
