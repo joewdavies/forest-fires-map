@@ -69,11 +69,14 @@ const FIRMS_SOURCE_ID = "active-fires-firms";
 const FIRMS_LAYER_ID = "active-fires-firms-circles";
 const FIRMS_MODIS_LAYER_ID = "active-fires-firms-modis";
 const FIRMS_MODIS_ICON_ID = "firms-modis-triangle";
-// EFFIS's own hotspot tiles render small — this keeps FIRMS's own points in
-// the same ballpark instead of dominating the map. Kept as a single source
-// of truth for both shapes: the triangle icon (see ensureFirmsModisIcon) is
-// sized off this same number so MODIS/VIIRS points read as the same size.
-const FIRMS_POINT_RADIUS = 3.5;
+// Smoothly scale FIRMS markers with zoom. Each pair is [zoom, radius in px];
+// both VIIRS circles and MODIS triangles derive their size from these stops.
+const FIRMS_POINT_RADIUS_STOPS = [
+  [3, 2],
+  [6, 3],
+  [10, 5],
+  [14, 8],
+] as const;
 const FIRMS_REFRESH_INTERVAL_MS = 15 * 60 * 1000;
 // The rolling-window "down" threshold in effisHealth.ts (4 failures/20s) is
 // tuned for detecting sustained degradation, and needs an actual error
@@ -810,7 +813,7 @@ function addFirmsActiveFiresLayer(map: MaplibreMap): void {
     filter: ["!=", ["get", "source"], "MODIS_NRT"],
     layout: { visibility: "none" },
     paint: {
-      "circle-radius": FIRMS_POINT_RADIUS,
+      "circle-radius": firmsPointRadiusExpression(),
       "circle-color": recencyColorExpression(),
     },
   });
@@ -824,7 +827,7 @@ function addFirmsActiveFiresLayer(map: MaplibreMap): void {
     layout: {
       visibility: "none",
       "icon-image": FIRMS_MODIS_ICON_ID,
-      "icon-size": (FIRMS_POINT_RADIUS * 2) / 24,
+      "icon-size": firmsIconSizeExpression(),
       "icon-allow-overlap": true,
       "icon-ignore-placement": true,
     },
@@ -875,6 +878,27 @@ function recencyColorExpression(): ExpressionSpecification {
     ...stops,
     "#999999",
   ] as unknown as ExpressionSpecification;
+}
+
+function firmsPointRadiusExpression(): ExpressionSpecification {
+  return [
+    "interpolate",
+    ["linear"],
+    ["zoom"],
+    ...FIRMS_POINT_RADIUS_STOPS.flat(),
+  ] as ExpressionSpecification;
+}
+
+function firmsIconSizeExpression(): ExpressionSpecification {
+  return [
+    "interpolate",
+    ["linear"],
+    ["zoom"],
+    ...FIRMS_POINT_RADIUS_STOPS.flatMap(([zoom, radius]) => [
+      zoom,
+      (radius * 2) / 24,
+    ]),
+  ] as ExpressionSpecification;
 }
 
 async function handleBasemapChange(kind: BasemapKind) {

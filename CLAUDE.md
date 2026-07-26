@@ -413,7 +413,9 @@ full research) and are untouched by this regardless of their own health.
   VIIRS sources) — a `circle` layer for VIIRS, and a `symbol` layer for
   MODIS using a small triangle registered via `map.addImage(..., { sdf:
   true })` (`ensureFirmsModisIcon()`) so `icon-color` can recolor it by
-  recency tier the same way `circle-color` does for VIIRS. Both layers are
+  recency tier the same way `circle-color` does for VIIRS. Both shapes use
+  zoom-interpolated sizing from `FIRMS_POINT_RADIUS_STOPS`: compact at
+  continent scale and progressively larger when zoomed in. Both layers are
   re-added on every basemap switch alongside the source itself (see below),
   since `setStyle()` drops registered images too. The "VIIRS / SENTINEL3"
   legend label that's accurate for EFFIS's own three-sensor coverage is
