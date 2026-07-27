@@ -1600,4 +1600,14 @@ body {
     background: rgba(255, 255, 255, 0.05);
     color: #fff;
   }
+
+  /* Position the loading spinner at the top-center on desktop to avoid all floating panels */
+  .map-loading-indicator {
+    top: 20px;
+    left: 50%;
+    margin-left: -20px;
+    right: auto !important;
+    bottom: auto !important;
+    transition: opacity 0.15s ease;
+  }
 }
