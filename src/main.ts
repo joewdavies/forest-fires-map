@@ -1514,7 +1514,7 @@ function updateLegend() {
     if (useCustomLegend) {
       // Use custom legend
       if (activeFiresImg) {
-        activeFiresImg.style.display = "none";
+        activeFiresImg.hidden = true;
       }
       if (activeFiresFallback) {
         activeFiresFallback.hidden = false;
@@ -1527,7 +1527,7 @@ function updateLegend() {
       // a static src would hit EFFIS's legend endpoint unconditionally even
       // when useCustomLegend is true and the image is never shown at all.
       if (activeFiresImg) {
-        activeFiresImg.style.display = "";
+        activeFiresImg.hidden = false;
         activeFiresImg.src =
           "/api/effis?service=WMS&request=GetLegendGraphic&layer=modis.hs.week&format=image/png";
       }
@@ -1548,7 +1548,7 @@ function updateLegend() {
     if (useCustomLegend) {
       // Use custom legend
       if (burntAreasImg) {
-        burntAreasImg.style.display = "none";
+        burntAreasImg.hidden = true;
       }
       if (burntAreasFallback) {
         burntAreasFallback.hidden = false;
@@ -1557,7 +1557,7 @@ function updateLegend() {
     } else {
       // Use WMS PNG
       if (burntAreasImg) {
-        burntAreasImg.style.display = "";
+        burntAreasImg.hidden = false;
       }
       if (burntAreasFallback) {
         burntAreasFallback.hidden = true;
@@ -1684,7 +1684,7 @@ function renderBurntAreasFallback() {
 
 if (activeFiresImg) {
   activeFiresImg.addEventListener("error", () => {
-    if (activeFiresImg) activeFiresImg.style.display = "none";
+    if (activeFiresImg) activeFiresImg.hidden = true;
     if (activeFiresFallback) {
       activeFiresFallback.hidden = false;
       renderActiveFiresFallback();
@@ -1694,7 +1694,7 @@ if (activeFiresImg) {
 
 if (burntAreasImg) {
   burntAreasImg.addEventListener("error", () => {
-    if (burntAreasImg) burntAreasImg.style.display = "none";
+    if (burntAreasImg) burntAreasImg.hidden = true;
     if (burntAreasFallback) {
       burntAreasFallback.hidden = false;
       renderBurntAreasFallback();

@@ -661,7 +661,18 @@ principle used by the EFFIS request paths.
   browser's small per-origin connection pool (everything in this app is
   same-origin by design, see the proxy note below) — removing them didn't
   fully fix that bug alone, but it's a real contributing factor worth
-  knowing about independent of the safety-timeout fix.
+  knowing about independent of the safety-timeout fix. Both tags also carry
+  a plain HTML **`hidden` attribute by default** (not just a missing `src`),
+  matching how their sibling `legend-fallback-*` divs are already marked
+  `hidden` in the HTML — since `config.json`'s `"legendType": "custom"`
+  means these `<img>`s are effectively never shown in practice, they'd
+  otherwise render the browser's broken-image placeholder (icon + alt text)
+  on every page load until `updateLegend()` ran, which is a real, visible
+  flash, not just a network waste — no CSS/JS timing can preempt it, since
+  the raw parsed HTML is what paints first. `updateLegend()` toggles
+  `.hidden` directly (not `.style.display`, which can't override an HTML
+  `hidden` attribute once set) to show the image only in the `!useCustomLegend`
+  branch.
 - `api/firms.ts` — the NASA FIRMS proxy, alongside `api/effis.ts`/
   `api/wmts.ts` but structurally different from both (see the "NASA FIRMS
   fallback" section above for why) — not a passthrough, since FIRMS's
