@@ -16,5 +16,10 @@
       {"color": "#FD7F7F", "borderColor": "#800000", "labelKey": "legend_last_1_day"},
       {"color": "#FDBE7F", "borderColor": "#C07F00", "labelKey": "legend_last_7_days"}
     ]
+  },
+  "pastFires": {
+    "colors": [
+      {"color": "#AD97C4", "borderColor": "#6A3D9A", "labelKey": "legend_burnt_area"}
+    ]
   }
 }

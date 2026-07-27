@@ -1670,8 +1670,15 @@ function renderActiveFiresFallback() {
 
 function renderBurntAreasFallback() {
   if (!burntAreasFallback) return;
+  // "Last day"/"Last 7 days" describe the *current* burnt-areas WMTS
+  // overlay's recency colouring — meaningless for "Past fires", which
+  // renders a single year's modis.ba.<year> layer in one fixed colour
+  // instead. Swap the whole swatch list on mode rather than filtering it,
+  // so switching modes can't leave a stale mix of the two on screen.
+  const colors =
+    mode === "past" ? legendConfig.pastFires.colors : legendConfig.burntAreas.colors;
   let html = `<div class="legend-fallback-section">`;
-  legendConfig.burntAreas.colors.forEach((item) => {
+  colors.forEach((item) => {
     html += `
       <div class="legend-fallback-row">
         <span class="legend-fallback-swatch" style="background-color: ${item.color}; border: 1.5px solid ${item.borderColor};"></span>
