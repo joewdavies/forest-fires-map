@@ -379,7 +379,13 @@ for (const option of basemapOptions) {
   });
 }
 
-layersBtn.addEventListener("click", openSheet);
+layersBtn.addEventListener("click", () => {
+  if (layersSheet.classList.contains("open")) {
+    closeSheet();
+  } else {
+    openSheet();
+  }
+});
 sheetCloseBtn.addEventListener("click", closeSheet);
 sheetBackdrop.addEventListener("click", closeSheet);
 document.addEventListener("keydown", (e) => {

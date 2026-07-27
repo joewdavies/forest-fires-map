@@ -1450,3 +1450,129 @@ body {
 .legend-fallback-label {
   white-space: nowrap;
 }
+
+/* ---------- Desktop Design for Layers Sheet ---------- */
+@media (min-width: 769px) {
+  /* Hide backdrop on desktop by default */
+  #sheet-backdrop {
+    display: none !important;
+  }
+
+  /* Show backdrop only when the about modal is open */
+  #about-modal:not([hidden]) ~ #sheet-backdrop {
+    display: block !important;
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* Transform the bottom sheet into a floating card */
+  .sheet {
+    position: absolute;
+    top: max(106px, calc(env(safe-area-inset-top) + 106px));
+    right: 64px;
+    bottom: auto;
+    left: auto;
+    width: 320px;
+    height: auto;
+    max-height: calc(100vh - 120px);
+    border-radius: 12px;
+    border: 1px solid #2d2d2d;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    transform: translateX(12px);
+    opacity: 0;
+    transition:
+      opacity 0.2s ease,
+      transform 0.2s ease;
+  }
+
+  .sheet.open {
+    transform: translateX(0);
+    opacity: 1;
+  }
+
+  /* Hide the swipe-to-dismiss handle on desktop */
+  .sheet-handle {
+    display: none;
+  }
+
+  .sheet-header {
+    padding: 0.75rem 0.75rem 0.5rem 1rem;
+    border-bottom: 1px solid #2d2d2d;
+  }
+
+  .sheet-header h2 {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #fff;
+  }
+
+  .sheet-content {
+    padding: 1rem;
+  }
+
+  .sheet-section {
+    margin-top: 1rem;
+  }
+
+  .sheet-section:first-child {
+    margin-top: 0;
+  }
+
+  .sheet-section h3 {
+    margin-bottom: 0.5rem;
+  }
+
+  /* Grid layout for basemaps so they are all visible at once without scrolling */
+  .basemap-gallery {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.5rem;
+    overflow-x: visible;
+    padding-bottom: 0;
+  }
+
+  .basemap-option {
+    width: auto;
+  }
+
+  .basemap-thumb {
+    width: 100%;
+    aspect-ratio: 1;
+    height: auto;
+    border-radius: 8px;
+    transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .basemap-option:hover .basemap-thumb {
+    transform: scale(1.04);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+  }
+
+  .basemap-option:hover .basemap-label {
+    color: #fff;
+  }
+
+  .basemap-label {
+    font-size: 0.7rem;
+    text-align: center;
+    transition: color 0.15s ease;
+  }
+
+  /* Hover states for premium desktop experience */
+  .detail-row-label {
+    transition: color 0.15s ease;
+  }
+
+  .detail-row:hover .detail-row-label {
+    color: #fff;
+  }
+
+  .segmented-btn {
+    transition: background-color 0.15s ease, color 0.15s ease;
+  }
+
+  .segmented-btn:not(.active):not(:disabled):hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: #fff;
+  }
+}
