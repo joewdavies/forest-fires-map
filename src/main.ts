@@ -795,10 +795,13 @@ layersSheet.addEventListener("touchstart", (e) => {
   const isHeader =
     target.classList.contains("sheet-header") ||
     target.closest(".sheet-header");
+  const isBasemapGallery =
+    target.classList.contains("basemap-gallery") ||
+    target.closest(".basemap-gallery");
   const contentEl = layersSheet.querySelector(".sheet-content") as HTMLElement;
   const isContentAtTop = contentEl ? contentEl.scrollTop === 0 : true;
 
-  if (isHandle || isHeader || isContentAtTop) {
+  if (!isBasemapGallery && (isHandle || isHeader || isContentAtTop)) {
     sheetStartY = touch.clientY;
     sheetCurrentY = touch.clientY;
     sheetIsDragging = true;
