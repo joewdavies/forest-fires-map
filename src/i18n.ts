@@ -71,8 +71,9 @@ const translations: Record<Language, Record<string, string>> = {
     legend_active_fires_via_firms: "via NASA FIRMS",
     aria_active_fires_source: "Active fires data source",
     active_fires_source_label: "Active fires data source",
-    active_fires_source_effis: "EFFIS (EU)",
-    active_fires_source_firms: "FIRMS (NASA)",
+    active_fires_source_effis: "EU",
+    active_fires_source_firms: "NASA",
+    active_fires_source_tooltip: "EU = EFFIS, NASA = FIRMS",
     provider_fallback_status:
       "EFFIS servers are down. Attempting to retrieve data from an alternative source (NASA FIRMS)…",
     effis_status_slow:
@@ -151,8 +152,9 @@ const translations: Record<Language, Record<string, string>> = {
     legend_active_fires_via_firms: "vía NASA FIRMS",
     aria_active_fires_source: "Fuente de datos de incendios activos",
     active_fires_source_label: "Fuente de datos de incendios activos",
-    active_fires_source_effis: "EFFIS",
-    active_fires_source_firms: "FIRMS",
+    active_fires_source_effis: "EU",
+    active_fires_source_firms: "NASA",
+    active_fires_source_tooltip: "EU = EFFIS, NASA = FIRMS",
     provider_fallback_status:
       "Los servidores de EFFIS no están disponibles. Intentando obtener datos de una fuente alternativa (NASA FIRMS)…",
     effis_status_slow:
@@ -232,8 +234,9 @@ const translations: Record<Language, Record<string, string>> = {
     legend_active_fires_via_firms: "über NASA FIRMS",
     aria_active_fires_source: "Datenquelle für aktive Brände",
     active_fires_source_label: "Datenquelle für aktive Brände",
-    active_fires_source_effis: "EFFIS",
-    active_fires_source_firms: "FIRMS",
+    active_fires_source_effis: "EU",
+    active_fires_source_firms: "NASA",
+    active_fires_source_tooltip: "EU = EFFIS, NASA = FIRMS",
     provider_fallback_status:
       "Die EFFIS-Server sind nicht erreichbar. Daten werden von einer alternativen Quelle (NASA FIRMS) abgerufen…",
     effis_status_slow:
@@ -313,8 +316,9 @@ const translations: Record<Language, Record<string, string>> = {
     legend_active_fires_via_firms: "via NASA FIRMS",
     aria_active_fires_source: "Source de données des incendies actifs",
     active_fires_source_label: "Source de données des incendies actifs",
-    active_fires_source_effis: "EFFIS",
-    active_fires_source_firms: "FIRMS",
+    active_fires_source_effis: "EU",
+    active_fires_source_firms: "NASA",
+    active_fires_source_tooltip: "EU = EFFIS, NASA = FIRMS",
     provider_fallback_status:
       "Les serveurs EFFIS sont indisponibles. Tentative de récupération des données depuis une source alternative (NASA FIRMS)…",
     effis_status_slow:
