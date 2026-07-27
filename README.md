@@ -3,26 +3,42 @@
 A MapLibre GL viewer for forest fires / wildfires. Shows current active-fire
 hotspots and burnt-area perimeters by default (each independently
 toggleable), with a mode switch to browse historical burnt areas by year
-instead. Rendered as a globe with a white basemap and black place-name
-labels.
+instead. Rendered as a globe, with a choice of basemap styles (a stripped
+white-and-black-labels style by default).
 
 ## Data & basemap
 
 - **Fire data**: [EFFIS](https://forest-fire.emergency.copernicus.eu/) (European
   Forest Fire Information System, EU Joint Research Centre / Copernicus
-  Emergency Management Service). Current fires render as WMS raster tiles —
-  "Burnt areas" (the `severity_time` layer) and "Active fires" (hotspot
-  detections from three satellite sources), matching the layer set EFFIS's
-  own production viewer uses by default. Past fires (by year) come from the
-  `ms:modis.ba.poly` WFS vector layer. EFFIS's WFS interface has proven very
-  unreliable in practice, which is why current fires use WMS instead — see
-  CLAUDE.md for the full story.
-- **Basemap**: [OpenFreeMap](https://openfreemap.org/) (Liberty style) — free
-  vector tiles, no API key required.
+  Emergency Management Service), served as WMTS raster tiles:
+  - **Active fires** — hotspot detections stacked from three satellite
+    sources (MODIS, VIIRS, Sentinel-3).
+  - **Burnt areas** — fire perimeter polygons stacked from two products
+    (MODIS + near-real-time).
+  - **Past fires** (by year, 2016+) — a per-year burnt-area raster layer,
+    plus a WFS vector layer kept wired up for click-for-details popups
+    (date/area/country/province) on the chance EFFIS's historically
+    unreliable WFS endpoint improves.
 
-EFFIS's endpoints are proxied (see `vite.config.ts` for dev, `api/effis.ts`
-for production) rather than called directly from the browser, since their
-CORS support isn't guaranteed to stay open indefinitely.
+  If EFFIS's active-fire tiles are unreachable, the app automatically falls
+  back to fetching hotspot data directly from
+  [NASA FIRMS](https://firms.modaps.eosdis.nasa.gov/) instead (EFFIS's own
+  active-fire detection is itself built on FIRMS) — there's also a manual
+  EFFIS/FIRMS toggle in the layers panel. FIRMS has no burnt-area or
+  Sentinel-3-equivalent data, so that fallback only ever covers "Active
+  fires".
+- **Basemap**: several styles to choose from in the layers panel — a
+  stripped-down [OpenFreeMap](https://openfreemap.org/) Liberty style
+  (white background, black place labels only) by default, plus OpenFreeMap's
+  Positron/Bright/Liberty/Dark/Fiord styles, Esri World Imagery satellite
+  tiles, and a 3D (terrain + buildings) style. Country borders are drawn
+  separately from Eurostat GISCO data.
+
+None of EFFIS/FIRMS is called directly from the browser — everything goes
+through a same-origin proxy (`vite.config.ts` in dev, a Vercel Edge Function
+per upstream in production: `api/effis.ts`, `api/wmts.ts`, `api/firms.ts`),
+since CORS support on these endpoints isn't guaranteed to stay open
+indefinitely, and because FIRMS's API key must never reach the client.
 
 ## Develop
 
@@ -30,6 +46,12 @@ CORS support isn't guaranteed to stay open indefinitely.
 npm install
 npm run dev
 ```
+
+To exercise the NASA FIRMS fallback locally (either via the manual toggle or
+the automatic cold-start check), add a `FIRMS_MAP_KEY` to a git-ignored
+`.env.local` file — register a free one at
+https://firms.modaps.eosdis.nasa.gov/api/map_key/. Without it, everything
+else works normally; only the FIRMS fallback requests will fail.
 
 ## Build
 
@@ -41,7 +63,9 @@ npm run preview # serve the production build locally
 ## Deploy
 
 Configured for [Vercel](https://vercel.com/): zero-config for the Vite
-static build, with the EFFIS proxy as a Vercel Edge Function at
-`api/effis.ts` (routes automatically to `/api/effis`, matching what the
-frontend and dev proxy call). `vercel --prod` or a connected Git repo both
-work out of the box — no `vercel.json` needed.
+static build, with the three upstream proxies as Vercel Edge Functions
+(`api/effis.ts`, `api/wmts.ts`, `api/firms.ts`, each routing automatically to
+the matching `/api/...` path). Set `FIRMS_MAP_KEY` in the project's
+environment variables (Vercel dashboard) for the NASA FIRMS fallback to work
+in production. `vercel --prod` or a connected Git repo both work out of the
+box — no `vercel.json` needed.

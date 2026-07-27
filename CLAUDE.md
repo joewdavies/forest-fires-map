@@ -22,6 +22,19 @@ npm run preview  # serve the production build locally
 There is no test suite or linter configured. Type-check with `npx tsc -b`
 (no `--noEmit` needed to re-check; `tsconfig.json` already sets `noEmit`).
 
+## Git workflow
+
+When a task is done (code type-checks, and has been manually verified where
+that applies), commit it and `git push` to `origin/main` as part of finishing
+— don't stop at a local commit, and don't ask "should I push?" first. This
+repo has no PR/review step before `main`, so treating "committed and pushed"
+as the default definition of "done" is what the user actually wants here,
+confirmed repeatedly. Still follow normal git safety practices: review
+`git status`/diff before staging (prefer naming files over `git add -A`,
+since concurrent edits from a live `npm run dev` session in this repo are
+common), never force-push, and don't push if something looks wrong or
+half-finished — ask instead in that case.
+
 ## Architecture
 
 **Data flow**: there is no backend/database — everything is client-fetched
