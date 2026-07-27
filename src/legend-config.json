@@ -14,7 +14,8 @@
   "burntAreas": {
     "colors": [
       {"color": "#FD7F7F", "borderColor": "#800000", "labelKey": "legend_last_1_day"},
-      {"color": "#FDBE7F", "borderColor": "#C07F00", "labelKey": "legend_last_7_days"}
+      {"color": "#FDBE7F", "borderColor": "#C07F00", "labelKey": "legend_last_7_days"},
+      {"color": "#8DC6FD", "borderColor": "#1E90C0", "labelKey": "legend_last_30_days"}
     ]
   },
   "pastFires": {

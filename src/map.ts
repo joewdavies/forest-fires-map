@@ -477,6 +477,7 @@ function addWmtsRasterLayer(
     // it's what makes MapLibre request the same z/x/y as that matrix set's
     // TileMatrix/TileCol/TileRow identifiers (see tileTemplate in effis.ts).
     tileSize: 1024,
+    maxzoom: 11,
     attribution: EFFIS_ATTRIBUTION,
   });
   map.addLayer({ id, type: "raster", source: id }, beforeId);
@@ -530,6 +531,7 @@ function addPastFiresLayer(map: Map): void {
     type: "raster",
     tiles: [pastFiresTileTemplate(new Date().getFullYear() - 1)],
     tileSize: 1024,
+    maxzoom: 11,
     attribution: EFFIS_ATTRIBUTION,
   });
   map.addLayer(
