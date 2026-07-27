@@ -487,15 +487,22 @@ successful response; a MapLibre source lifecycle event or HTTP 503/504 does
 not satisfy it. The first successful probe cancels the others. A one-shot
 4s timer (`INITIAL_LOAD_TIMEOUT_MS`) engages the FIRMS fallback if no probe
 has succeeded by then and the provider is still EFFIS. Engaging FIRMS removes
-all EFFIS WMTS layers and sources, rather than merely hiding them, so
-MapLibre cannot retain or retry WMTS tile work in the background. This means
-burnt-area and historical WMTS rasters are unavailable in FIRMS mode (FIRMS
-has no equivalent); `updateLegend()` therefore only shows the current
-Burnt-areas legend entry when at least one burnt-area map layer actually
-exists, avoiding a legend for data that was removed during fallback.
-Manually selecting EFFIS recreates the complete WMTS stack. Basemap changes
-also skip recreating that stack while FIRMS remains selected. During the
-automatic handoff, `#provider-fallback-status` shows a
+only the EFFIS active-fires WMTS layers and sources (`removeActiveFiresLayers`
+in `map.ts`), not merely hiding them, so MapLibre cannot retain or retry that
+tile work in the background — Burnt areas and Past fires are untouched and
+keep running on EFFIS throughout, since FIRMS has no equivalent for either
+and there's no reason to assume they're broken just because Active fires'
+cold-start probe failed (an earlier version removed the *entire* EFFIS WMTS
+stack here, which silently broke Burnt areas/Past fires every time FIRMS
+engaged — fixed after the user caught it happening live).
+`updateLegend()`'s Burnt-areas-layer-existence check is now effectively
+always true in "current" mode, but is kept as a defensive guard against the
+brief window mid-basemap-switch where layers don't exist yet. Manually
+selecting EFFIS recreates just the active-fires WMTS stack
+(`addActiveFiresLayers`). Basemap changes always re-add Burnt areas/Past
+fires regardless of provider, and only skip re-adding Active fires' WMTS
+layers while FIRMS remains selected (`setBasemap`'s `includeActiveFiresLayer`
+param in `map.ts`). During the automatic handoff, `#provider-fallback-status` shows a
 localized, non-blocking popup explaining that EFFIS is down and NASA FIRMS
 is being queried; it is hidden in a `finally` block when that request
 settles. That popup has its own inline spinner, so `setMapLoading()` suppresses

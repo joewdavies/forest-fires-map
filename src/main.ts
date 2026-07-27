@@ -21,9 +21,9 @@ import {
 } from "maplibre-gl";
 import type { FeatureCollection } from "geojson";
 import {
-  addEffisWmtsLayers,
+  addActiveFiresLayers,
   createMap,
-  removeEffisWmtsLayers,
+  removeActiveFiresLayers,
   setBasemap,
   setPastFiresYear,
   setPlaceLabelsLanguage,
@@ -499,8 +499,13 @@ function refreshEffisWarningText(): void {
 async function engageFirmsFallback(showStartupStatus = false): Promise<void> {
   activeFiresProvider = "firms";
   updateActiveFiresSourceUi();
-  removeEffisWmtsLayers(map);
-  loadingWmtsSources.clear();
+  removeActiveFiresLayers(map);
+  // Only the active-fires sources are gone — Burnt areas / Past fires keep
+  // running on EFFIS, so a real in-flight load for either shouldn't be
+  // wiped from the tracker just because Active fires switched providers.
+  for (const id of ACTIVE_FIRES_LAYER_IDS) {
+    loadingWmtsSources.delete(id);
+  }
   updateFireLoadingIndicator();
   applyModeVisibility();
   updateLegend();
@@ -525,8 +530,7 @@ function disengageFirmsFallback(): void {
   (map.getSource(FIRMS_SOURCE_ID) as GeoJSONSource | undefined)?.setData(
     emptyCollection(),
   );
-  addEffisWmtsLayers(map);
-  setPastFiresYear(map, Number(yearSelect.value));
+  addActiveFiresLayers(map);
   applyModeVisibility();
   updateLegend();
 }

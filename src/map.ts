@@ -214,7 +214,7 @@ export function setBasemap(
   kind: BasemapKind,
   placeLabelsEnabled: boolean,
   language: Language,
-  effisWmtsEnabled = true,
+  includeActiveFiresLayer = true,
 ): Promise<void> {
   return styleForBasemap(kind, language).then(
     (style) =>
@@ -232,7 +232,12 @@ export function setBasemap(
             map.dragRotate.disable();
           }
           addCountryBorders(map, kind);
-          if (effisWmtsEnabled) addEffisWmtsLayers(map);
+          // Burnt areas / Past fires stay on EFFIS regardless of the
+          // Active-fires provider — FIRMS has no equivalent for either, so
+          // there's no "disabled" state for them to skip re-adding here.
+          addBurntAreasLayers(map);
+          addPastFiresLayer(map);
+          if (includeActiveFiresLayer) addActiveFiresLayers(map);
           await setPlaceLabelsVisible(map, placeLabelsEnabled, language);
           resolve();
         };
@@ -498,7 +503,7 @@ function addBurntAreasLayers(map: Map): void {
  * and Sentinel-3 — stacked above the burnt-area polygons so hotspots stay
  * visible where they overlap. All three are toggled together by main.ts's
  * "Active fires" control, matching EFFIS's own default view. */
-function addActiveFiresLayers(map: Map): void {
+export function addActiveFiresLayers(map: Map): void {
   const firstSymbolLayer = map
     .getStyle()
     .layers.find((layer) => layer.type === "symbol");
@@ -533,31 +538,23 @@ function addPastFiresLayer(map: Map): void {
   );
 }
 
-/** Restores the complete EFFIS WMTS stack after switching back from FIRMS. */
-export function addEffisWmtsLayers(map: Map): void {
-  addBurntAreasLayers(map);
-  addActiveFiresLayers(map);
-  addPastFiresLayer(map);
-}
-
-/** Removing the layers alone is insufficient: deleting the raster sources
- * also cancels MapLibre's outstanding/retry tile pipeline. */
-export function removeEffisWmtsLayers(map: Map): void {
-  const ids = [
-    ...ACTIVE_FIRES_LAYER_IDS,
-    ...BURNT_AREAS_LAYER_IDS,
-    PAST_FIRES_LAYER_ID,
-  ];
-  for (const id of ids) {
+/** Removing the layer alone is insufficient: deleting the raster sources
+ * also cancels MapLibre's outstanding/retry tile pipeline. Scoped to just
+ * the active-fires sources — used when switching "Active fires" to the NASA
+ * FIRMS fallback. Burnt areas and Past fires have no FIRMS equivalent and
+ * stay on EFFIS regardless of that toggle, so they're never removed here. */
+export function removeActiveFiresLayers(map: Map): void {
+  for (const id of ACTIVE_FIRES_LAYER_IDS) {
     if (map.getLayer(id)) map.removeLayer(id);
   }
-  for (const id of ids) {
+  for (const id of ACTIVE_FIRES_LAYER_IDS) {
     if (map.getSource(id)) map.removeSource(id);
   }
 }
 
-/** Repoints the past-fires raster layer at a different year's tiles.
- * Safely does nothing while FIRMS mode has removed the WMTS stack. */
+/** Repoints the past-fires raster layer at a different year's tiles. Guards
+ * against a momentarily-missing source (e.g. mid basemap-switch) rather
+ * than assuming it always exists. */
 export function setPastFiresYear(map: Map, year: number): void {
   const source = map.getSource(PAST_FIRES_LAYER_ID) as
     | RasterTileSource
