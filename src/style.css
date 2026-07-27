@@ -1468,13 +1468,13 @@ body {
   /* Transform the bottom sheet into a floating card */
   .sheet {
     position: absolute;
-    top: 70px;
+    top: 60px;
     left: 10px;
     bottom: auto;
     right: auto;
     width: 320px;
     height: auto;
-    max-height: calc(100vh - 90px);
+    max-height: calc(100% - 70px);
     border-radius: 12px;
     border: 1px solid #2d2d2d;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);

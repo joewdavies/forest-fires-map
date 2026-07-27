@@ -171,6 +171,99 @@
             alternative source (NASA FIRMS)…</span
           >
         </div>
+        <div id="layers-sheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title" hidden inert>
+          <div class="sheet-handle"></div>
+          <div class="sheet-header">
+            <h2 id="sheet-title" data-i18n="layers_title">Layers</h2>
+            <button type="button" id="sheet-close" class="icon-btn" data-i18n-aria-label="aria_close" aria-label="Close">&times;</button>
+          </div>
+          <div class="sheet-content">
+            <section class="sheet-section">
+              <h3 data-i18n="basemap">Basemap</h3>
+              <div id="basemap-gallery" class="basemap-gallery" role="radiogroup" data-i18n-aria-label="aria_bg_map" aria-label="Background map">
+                <button type="button" class="basemap-option" data-basemap="plain" role="radio" aria-checked="true">
+                  <span class="basemap-thumb basemap-thumb-plain"></span>
+                  <span class="basemap-label" data-i18n="basemap_plain">Plain</span>
+                </button>
+                <button type="button" class="basemap-option" data-basemap="positron" role="radio" aria-checked="false">
+                  <span class="basemap-thumb basemap-thumb-positron"></span>
+                  <span class="basemap-label" data-i18n="basemap_positron">Positron</span>
+                </button>
+                <button type="button" class="basemap-option" data-basemap="bright" role="radio" aria-checked="false">
+                  <span class="basemap-thumb basemap-thumb-bright"></span>
+                  <span class="basemap-label" data-i18n="basemap_bright">Bright</span>
+                </button>
+                <button type="button" class="basemap-option" data-basemap="liberty" role="radio" aria-checked="false">
+                  <span class="basemap-thumb basemap-thumb-liberty"></span>
+                  <span class="basemap-label" data-i18n="basemap_liberty">Liberty</span>
+                </button>
+                <button type="button" class="basemap-option" data-basemap="dark" role="radio" aria-checked="false">
+                  <span class="basemap-thumb basemap-thumb-dark"></span>
+                  <span class="basemap-label" data-i18n="basemap_dark">Dark</span>
+                </button>
+                <button type="button" class="basemap-option" data-basemap="fiord" role="radio" aria-checked="false">
+                  <span class="basemap-thumb basemap-thumb-fiord"></span>
+                  <span class="basemap-label" data-i18n="basemap_fiord">Fiord</span>
+                </button>
+                <button type="button" class="basemap-option" data-basemap="satellite" role="radio" aria-checked="false">
+                  <span class="basemap-thumb basemap-thumb-satellite"></span>
+                  <span class="basemap-label" data-i18n="basemap_satellite">Satellite</span>
+                </button>
+                <button type="button" class="basemap-option" data-basemap="3d" role="radio" aria-checked="false">
+                  <span class="basemap-thumb basemap-thumb-3d"></span>
+                  <span class="basemap-label" data-i18n="basemap_3d">3D</span>
+                </button>
+              </div>
+            </section>
+
+            <section class="sheet-section">
+              <h3 data-i18n="map_details">Map details</h3>
+              <div id="mode-toggle" class="segmented" role="group" data-i18n-aria-label="aria_fire_time_range" aria-label="Fire time range">
+                <button type="button" id="mode-current" class="segmented-btn active" aria-pressed="true" data-i18n="current_fires">
+                  Current fires
+                </button>
+                <button type="button" id="mode-past" class="segmented-btn" aria-pressed="false" data-i18n="past_fires">
+                  Past fires
+                </button>
+              </div>
+              <select id="year-select" hidden></select>
+
+              <div id="layer-toggle" class="detail-list fire-layer-list" role="group" data-i18n-aria-label="aria_fire_layers" aria-label="Fire layers">
+                <label class="detail-row">
+                  <span class="detail-row-label" data-i18n="active_fires">Active fires</span>
+                  <span class="switch">
+                    <input type="checkbox" id="toggle-active-fires" checked />
+                    <span class="switch-track"></span>
+                  </span>
+                </label>
+                <div class="detail-row detail-row-static">
+                  <span class="detail-row-label" data-i18n="active_fires_source_label">Active fires data source</span>
+                  <div id="active-fires-source" class="segmented segmented-sm" role="group" data-i18n-aria-label="aria_active_fires_source" aria-label="Active fires data source">
+                    <button type="button" id="active-fires-source-effis" class="segmented-btn active" aria-pressed="true" data-i18n="active_fires_source_effis">EFFIS</button>
+                    <button type="button" id="active-fires-source-firms" class="segmented-btn" aria-pressed="false" data-i18n="active_fires_source_firms">FIRMS</button>
+                  </div>
+                </div>
+                <label class="detail-row">
+                  <span class="detail-row-label" data-i18n="burnt_areas">Burnt areas</span>
+                  <span class="switch">
+                    <input type="checkbox" id="toggle-burnt-areas" checked />
+                    <span class="switch-track"></span>
+                  </span>
+                </label>
+              </div>
+
+              <div class="detail-list place-label-list">
+                <label class="detail-row">
+                  <span class="detail-row-label" data-i18n="place_names">Place names</span>
+                  <span class="switch">
+                    <input type="checkbox" id="toggle-place-labels" checked />
+                    <span class="switch-track"></span>
+                  </span>
+                </label>
+              </div>
+            </section>
+          </div>
+        </div>
       </div>
 
       <div id="about-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="about-title" hidden inert>
@@ -202,99 +295,6 @@
       </div>
 
       <div id="sheet-backdrop" hidden></div>
-      <div id="layers-sheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title" hidden inert>
-        <div class="sheet-handle"></div>
-        <div class="sheet-header">
-          <h2 id="sheet-title" data-i18n="layers_title">Layers</h2>
-          <button type="button" id="sheet-close" class="icon-btn" data-i18n-aria-label="aria_close" aria-label="Close">&times;</button>
-        </div>
-        <div class="sheet-content">
-          <section class="sheet-section">
-            <h3 data-i18n="basemap">Basemap</h3>
-            <div id="basemap-gallery" class="basemap-gallery" role="radiogroup" data-i18n-aria-label="aria_bg_map" aria-label="Background map">
-              <button type="button" class="basemap-option" data-basemap="plain" role="radio" aria-checked="true">
-                <span class="basemap-thumb basemap-thumb-plain"></span>
-                <span class="basemap-label" data-i18n="basemap_plain">Plain</span>
-              </button>
-              <button type="button" class="basemap-option" data-basemap="positron" role="radio" aria-checked="false">
-                <span class="basemap-thumb basemap-thumb-positron"></span>
-                <span class="basemap-label" data-i18n="basemap_positron">Positron</span>
-              </button>
-              <button type="button" class="basemap-option" data-basemap="bright" role="radio" aria-checked="false">
-                <span class="basemap-thumb basemap-thumb-bright"></span>
-                <span class="basemap-label" data-i18n="basemap_bright">Bright</span>
-              </button>
-              <button type="button" class="basemap-option" data-basemap="liberty" role="radio" aria-checked="false">
-                <span class="basemap-thumb basemap-thumb-liberty"></span>
-                <span class="basemap-label" data-i18n="basemap_liberty">Liberty</span>
-              </button>
-              <button type="button" class="basemap-option" data-basemap="dark" role="radio" aria-checked="false">
-                <span class="basemap-thumb basemap-thumb-dark"></span>
-                <span class="basemap-label" data-i18n="basemap_dark">Dark</span>
-              </button>
-              <button type="button" class="basemap-option" data-basemap="fiord" role="radio" aria-checked="false">
-                <span class="basemap-thumb basemap-thumb-fiord"></span>
-                <span class="basemap-label" data-i18n="basemap_fiord">Fiord</span>
-              </button>
-              <button type="button" class="basemap-option" data-basemap="satellite" role="radio" aria-checked="false">
-                <span class="basemap-thumb basemap-thumb-satellite"></span>
-                <span class="basemap-label" data-i18n="basemap_satellite">Satellite</span>
-              </button>
-              <button type="button" class="basemap-option" data-basemap="3d" role="radio" aria-checked="false">
-                <span class="basemap-thumb basemap-thumb-3d"></span>
-                <span class="basemap-label" data-i18n="basemap_3d">3D</span>
-              </button>
-            </div>
-          </section>
-
-          <section class="sheet-section">
-            <h3 data-i18n="map_details">Map details</h3>
-            <div id="mode-toggle" class="segmented" role="group" data-i18n-aria-label="aria_fire_time_range" aria-label="Fire time range">
-              <button type="button" id="mode-current" class="segmented-btn active" aria-pressed="true" data-i18n="current_fires">
-                Current fires
-              </button>
-              <button type="button" id="mode-past" class="segmented-btn" aria-pressed="false" data-i18n="past_fires">
-                Past fires
-              </button>
-            </div>
-            <select id="year-select" hidden></select>
-
-            <div id="layer-toggle" class="detail-list fire-layer-list" role="group" data-i18n-aria-label="aria_fire_layers" aria-label="Fire layers">
-              <label class="detail-row">
-                <span class="detail-row-label" data-i18n="active_fires">Active fires</span>
-                <span class="switch">
-                  <input type="checkbox" id="toggle-active-fires" checked />
-                  <span class="switch-track"></span>
-                </span>
-              </label>
-              <div class="detail-row detail-row-static">
-                <span class="detail-row-label" data-i18n="active_fires_source_label">Active fires data source</span>
-                <div id="active-fires-source" class="segmented segmented-sm" role="group" data-i18n-aria-label="aria_active_fires_source" aria-label="Active fires data source">
-                  <button type="button" id="active-fires-source-effis" class="segmented-btn active" aria-pressed="true" data-i18n="active_fires_source_effis">EFFIS</button>
-                  <button type="button" id="active-fires-source-firms" class="segmented-btn" aria-pressed="false" data-i18n="active_fires_source_firms">FIRMS</button>
-                </div>
-              </div>
-              <label class="detail-row">
-                <span class="detail-row-label" data-i18n="burnt_areas">Burnt areas</span>
-                <span class="switch">
-                  <input type="checkbox" id="toggle-burnt-areas" checked />
-                  <span class="switch-track"></span>
-                </span>
-              </label>
-            </div>
-
-            <div class="detail-list place-label-list">
-              <label class="detail-row">
-                <span class="detail-row-label" data-i18n="place_names">Place names</span>
-                <span class="switch">
-                  <input type="checkbox" id="toggle-place-labels" checked />
-                  <span class="switch-track"></span>
-                </span>
-              </label>
-            </div>
-          </section>
-        </div>
-      </div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
