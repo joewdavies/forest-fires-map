@@ -566,9 +566,7 @@ body {
 }
 
 .basemap-thumb-satellite {
-  background:
-    radial-gradient(circle at 30% 30%, #6b8f4e, transparent 55%),
-    radial-gradient(circle at 70% 60%, #4a6b3a, transparent 55%), #3d5a34;
+  background-image: url("/thumbnails/satellite.png");
 }
 
 .basemap-thumb-3d {
