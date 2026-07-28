@@ -1378,6 +1378,20 @@ body {
   #legend-fallback-active-fires .legend-fallback-heading {
     display: block;
   }
+
+  .legend-body.both-active #legend-item-active-fires {
+    grid-column: 1;
+  }
+
+  .legend-body.both-active #legend-item-burnt-areas {
+    grid-column: 2;
+  }
+
+  .legend-body.both-active #legend-fallback-active-fires {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
 }
 
 /* ---------- Custom Fallback Legend Styling ---------- */

@@ -1619,6 +1619,28 @@ function updateLegend() {
       }
     }
   }
+
+  const activeFiresShown = isCurrentMode && activeFiresCheckbox.checked;
+  let burntAreasShown = false;
+  if (burntAreasItem) {
+    if (isCurrentMode) {
+      const burntAreasAvailable = BURNT_AREAS_LAYER_IDS.some((id) =>
+        Boolean(map.getLayer(id)),
+      );
+      burntAreasShown = burntAreasCheckbox.checked && burntAreasAvailable;
+    } else {
+      burntAreasShown = true;
+    }
+  }
+
+  const legendBody = document.querySelector(".legend-body");
+  if (legendBody) {
+    if (activeFiresShown && burntAreasShown) {
+      legendBody.classList.add("both-active");
+    } else {
+      legendBody.classList.remove("both-active");
+    }
+  }
 }
 
 legendBtn.addEventListener("click", () => {
