@@ -51,7 +51,7 @@ const REQUEST_TIMEOUT_MS = 15_000;
 // (seen both 1-5 and 1-10) — 3 stays safely under either, without needing
 // to confirm the true limit before this can be used at all. Revisit if
 // wanting to match the "last 7 days" legend tier more closely.
-const DEFAULT_DAY_RANGE = 7;
+const DEFAULT_DAY_RANGE = 3;
 
 // MODIS and VIIRS use different field names for the same concepts
 // (brightness temperature, confidence scale) — probed the same
