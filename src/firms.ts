@@ -140,45 +140,41 @@ async function fetchOneSource(
   bboxStr: string,
   days: number,
 ): Promise<Feature<Point>[]> {
-  if (days <= 5) {
-    const url = `${FIRMS_PROXY}?source=${source}&bbox=${bboxStr}&days=${days}`;
-    const response = await fetch(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+  const requests: { url: string; daysRequested: number }[] = [];
+  let daysRemaining = days;
+  let offsetDays = 0;
+
+  while (daysRemaining > 0) {
+    const chunkDays = Math.min(5, daysRemaining);
+    if (offsetDays === 0) {
+      requests.push({
+        url: `${FIRMS_PROXY}?source=${source}&bbox=${bboxStr}&days=${chunkDays}`,
+        daysRequested: chunkDays,
+      });
+    } else {
+      const d = new Date();
+      d.setUTCDate(d.getUTCDate() - offsetDays);
+      const dateStr = d.toISOString().split("T")[0];
+      requests.push({
+        url: `${FIRMS_PROXY}?source=${source}&bbox=${bboxStr}&days=${chunkDays}&date=${dateStr}`,
+        daysRequested: chunkDays,
+      });
+    }
+    daysRemaining -= chunkDays;
+    offsetDays += chunkDays;
+  }
+
+  const fetches = requests.map(async (req, index) => {
+    const response = await fetch(req.url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
     if (!response.ok) {
-      throw new Error(`FIRMS ${source} request failed (HTTP ${response.status})`);
+      throw new Error(`FIRMS ${source} request ${index + 1} failed (HTTP ${response.status})`);
     }
     const text = await response.text();
     return rowsToFeatures(parseCsv(text), source);
-  }
+  });
 
-  // NASA FIRMS limits requests to a max of 5 days.
-  // For queries > 5 days (e.g. 7 days), we split into two parallel requests:
-  // 1. The last 5 days (today and the previous 4 days).
-  // 2. The remaining days prior (e.g., remaining 2 days) starting 5 days ago.
-  const firstDays = 5;
-  const secondDays = days - 5;
-  const d = new Date();
-  d.setUTCDate(d.getUTCDate() - 5);
-  const dateStr = d.toISOString().split("T")[0];
-
-  const url1 = `${FIRMS_PROXY}?source=${source}&bbox=${bboxStr}&days=${firstDays}`;
-  const url2 = `${FIRMS_PROXY}?source=${source}&bbox=${bboxStr}&days=${secondDays}&date=${dateStr}`;
-
-  const [res1, res2] = await Promise.all([
-    fetch(url1, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) }),
-    fetch(url2, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) }),
-  ]);
-
-  if (!res1.ok) {
-    throw new Error(`FIRMS ${source} first request failed (HTTP ${res1.status})`);
-  }
-  if (!res2.ok) {
-    throw new Error(`FIRMS ${source} second request failed (HTTP ${res2.status})`);
-  }
-
-  const [text1, text2] = await Promise.all([res1.text(), res2.text()]);
-  const features1 = rowsToFeatures(parseCsv(text1), source);
-  const features2 = rowsToFeatures(parseCsv(text2), source);
-  return [...features1, ...features2];
+  const allFeatures = await Promise.all(fetches);
+  return allFeatures.flat();
 }
 
 /** Fetches all four available FIRMS sources in parallel and merges them
