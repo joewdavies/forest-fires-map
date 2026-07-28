@@ -444,6 +444,18 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && !layersSheet.hidden) closeSheet();
 });
 
+const activeFiresSourceInfoBtn = document.querySelector(".info-btn") as HTMLButtonElement | null;
+if (activeFiresSourceInfoBtn) {
+  activeFiresSourceInfoBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const text = activeFiresSourceInfoBtn.getAttribute("aria-label");
+    if (text) {
+      alert(text);
+    }
+  });
+}
+
 compassBtn.addEventListener("click", () => {
   map.resetNorthPitch();
 });
