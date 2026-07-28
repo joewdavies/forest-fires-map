@@ -276,10 +276,12 @@
                     <span data-i18n="active_fires_source_label">Active fires data source</span>
                     <button
                       type="button"
-                      class="info-btn has-tooltip"
-                      data-tooltip-pos="top"
+                      class="info-btn"
                       data-i18n-aria-label="active_fires_source_tooltip"
                       aria-label="EU = EFFIS, NASA = FIRMS"
+                      aria-controls="active-fires-source-info"
+                      aria-describedby="active-fires-source-info"
+                      aria-expanded="false"
                     >
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                         <circle cx="12" cy="12" r="10"></circle>
@@ -287,6 +289,13 @@
                         <line x1="12" y1="8" x2="12.01" y2="8"></line>
                       </svg>
                     </button>
+                    <span
+                      id="active-fires-source-info"
+                      class="source-info-popover"
+                      role="tooltip"
+                      data-i18n="active_fires_source_tooltip"
+                      hidden
+                    >EU = EFFIS, NASA = FIRMS</span>
                   </span>
                   <div id="active-fires-source" class="segmented segmented-sm" role="group" data-i18n-aria-label="aria_active_fires_source" aria-label="Active fires data source">
                     <button type="button" id="active-fires-source-effis" class="segmented-btn active" aria-pressed="true" data-i18n="active_fires_source_effis">EFFIS</button>

@@ -3,7 +3,7 @@ import legendConfig from "./legend-config.json";
 
 // NASA FIRMS (Fire Information for Resource Management System) — the
 // fallback data source for "Active fires" when EFFIS's own WMTS pipeline is
-// detected as down (see effisHealth.ts's per-group health tracking and
+// detected as down (see effis-health.ts's per-group health tracking and
 // main.ts's engageFirmsFallback()). EFFIS's own active-fire detection is
 // itself built on FIRMS (confirmed in docs/firms-migration-plan.md), so this
 // isn't a data-quality downgrade — it's the same underlying satellite

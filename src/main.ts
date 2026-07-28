@@ -1,21 +1,9 @@
-import {
-  initTranslations,
-  t,
-  getLanguage,
-  setLanguage,
-} from "./i18n";
+import { initTranslations, t, getLanguage, setLanguage } from "./i18n";
 import { inject } from "@vercel/analytics";
 import { injectSpeedInsights } from "@vercel/speed-insights";
 import "./style.css";
 import config from "../config.json";
-import {
-  Popup,
-  type GeoJSONSource,
-  type LngLat,
-  type Map as MaplibreMap,
-  type MapGeoJSONFeature,
-  type MapLayerMouseEvent,
-} from "maplibre-gl";
+import { Popup, type GeoJSONSource, type LngLat, type Map as MaplibreMap, type MapGeoJSONFeature, type MapLayerMouseEvent } from "maplibre-gl";
 import type { FeatureCollection } from "geojson";
 import {
   addActiveFiresLayers,
@@ -41,39 +29,19 @@ import {
   tileTemplate,
   type WmtsLayerKind,
 } from "./effis";
-import {
-  watchEffisHealth,
-  type EffisHealth,
-  type EffisHealthReport,
-} from "./effisHealth";
-import {
-  fetchActiveFiresFallback,
-  EUROPE_BBOX,
-} from "./firms";
-import {
-  installAppLifecycle,
-  loadPersistedAppState,
-  restoreMapCamera,
-  type PersistedAppState,
-} from "./core/lifecycle/appLifecycle";
-import { createBackgroundWorkController } from "./core/lifecycle/backgroundWork";
-import {
-  installDevelopmentPerformanceTelemetry,
-  logFirmsFeatureCounts,
-} from "./core/telemetry/performanceTelemetry";
-import {
-  addFirmsActiveFiresLayer,
-  FIRMS_GLOW_LAYER_ID,
-  FIRMS_LAYER_ID,
-  FIRMS_MODIS_LAYER_ID,
-  FIRMS_SOURCE_ID,
-} from "./map/layers/firmsActiveFires";
-import { installLayersSheet } from "./ui/layersSheet";
-import { installPlaceSearch } from "./features/search/placeSearch";
-import { createMeasurementTool } from "./features/measurement/measurementTool";
-import { createLegendController } from "./features/legend/legendController";
-import { installLanguageSwitcher } from "./ui/languageSwitcher";
-import { installAboutModal } from "./ui/aboutModal";
+import { watchEffisHealth, type EffisHealth, type EffisHealthReport } from "./effis-health";
+import { fetchActiveFiresFallback, EUROPE_BBOX } from "./firms";
+import { installAppLifecycle, loadPersistedAppState, restoreMapCamera, type PersistedAppState } from "./core/lifecycle/app-lifecycle";
+import { createBackgroundWorkController } from "./core/lifecycle/background-work";
+import { installDevelopmentPerformanceTelemetry, logFirmsFeatureCounts } from "./core/telemetry/performance-telemetry";
+import { addFirmsActiveFiresLayer, FIRMS_GLOW_LAYER_ID, FIRMS_LAYER_ID, FIRMS_MODIS_LAYER_ID, FIRMS_SOURCE_ID } from "./map/layers/firms-active-fires";
+import { installLayersSheet } from "./ui/layers-sheet";
+import { installPlaceSearch } from "./features/search/place-search";
+import { createMeasurementTool } from "./features/measurement/measurement-tool";
+import { createLegendController } from "./features/legend/legend-controller";
+import { installLanguageSwitcher } from "./ui/language-switcher";
+import { installAboutModal } from "./ui/about-modal";
+import { installInfoPopover } from "./ui/info-popover";
 
 inject();
 injectSpeedInsights();
@@ -84,7 +52,7 @@ const FIRE_FILL_LAYER = "fires-fill";
 const FIRE_OUTLINE_LAYER = "fires-outline";
 const EARLIEST_YEAR = 2000;
 const FIRMS_REFRESH_INTERVAL_MS = 15 * 60 * 1000;
-// The rolling-window "down" threshold in effisHealth.ts (4 failures/20s) is
+// The rolling-window "down" threshold in effis-health.ts (4 failures/20s) is
 // tuned for detecting sustained degradation, and needs an actual error
 // event to count anything — a request that just hangs forever without ever
 // erroring wouldn't trip it for a long time, if ever. This is a separate,
@@ -114,102 +82,57 @@ const currentBtn = document.getElementById("mode-current") as HTMLButtonElement;
 const pastBtn = document.getElementById("mode-past") as HTMLButtonElement;
 const yearSelect = document.getElementById("year-select") as HTMLSelectElement;
 const layerToggle = document.getElementById("layer-toggle") as HTMLElement;
-const activeFiresCheckbox = document.getElementById(
-  "toggle-active-fires",
-) as HTMLInputElement;
-const burntAreasCheckbox = document.getElementById(
-  "toggle-burnt-areas",
-) as HTMLInputElement;
-const placeLabelsCheckbox = document.getElementById(
-  "toggle-place-labels",
-) as HTMLInputElement;
+const activeFiresCheckbox = document.getElementById("toggle-active-fires") as HTMLInputElement;
+const burntAreasCheckbox = document.getElementById("toggle-burnt-areas") as HTMLInputElement;
+const placeLabelsCheckbox = document.getElementById("toggle-place-labels") as HTMLInputElement;
 
 let currentDaysRange = restoredSession?.daysRange ?? 7;
-const currentRangeToggle = document.getElementById(
-  "current-range-toggle",
-) as HTMLElement;
-const currentRangeBtns = currentRangeToggle.querySelectorAll(
-  "button",
-) as NodeListOf<HTMLButtonElement>;
+const currentRangeToggle = document.getElementById("current-range-toggle") as HTMLElement;
+const currentRangeBtns = currentRangeToggle.querySelectorAll("button") as NodeListOf<HTMLButtonElement>;
 
 const layersBtn = document.getElementById("layers-btn") as HTMLButtonElement;
 const layersSheet = document.getElementById("layers-sheet") as HTMLElement;
-const sheetCloseBtn = document.getElementById(
-  "sheet-close",
-) as HTMLButtonElement;
+const sheetCloseBtn = document.getElementById("sheet-close") as HTMLButtonElement;
 const sheetBackdrop = document.getElementById("sheet-backdrop") as HTMLElement;
-const basemapOptions = document.querySelectorAll(
-  ".basemap-option",
-) as NodeListOf<HTMLButtonElement>;
+const basemapOptions = document.querySelectorAll(".basemap-option") as NodeListOf<HTMLButtonElement>;
 const compassBtn = document.getElementById("compass-btn") as HTMLButtonElement;
-const compassNeedle = document.getElementById(
-  "compass-needle",
-) as SVGElement | null;
+const compassNeedle = document.getElementById("compass-needle") as SVGElement | null;
 const measureBtn = document.getElementById("measure-btn") as HTMLButtonElement;
-const measureTooltip = document.getElementById(
-  "measure-tooltip",
-) as HTMLElement;
-const measureTooltipText = document.getElementById(
-  "measure-tooltip-text",
-) as HTMLElement;
-const measureCloseBtn = document.getElementById(
-  "measure-close",
-) as HTMLButtonElement;
+const measureTooltip = document.getElementById("measure-tooltip") as HTMLElement;
+const measureTooltipText = document.getElementById("measure-tooltip-text") as HTMLElement;
+const measureCloseBtn = document.getElementById("measure-close") as HTMLButtonElement;
 
 const effisWarning = document.getElementById("effis-warning") as HTMLElement;
-const effisWarningText = document.getElementById(
-  "effis-warning-text",
-) as HTMLElement;
-const effisWarningClose = document.getElementById(
-  "effis-warning-close",
-) as HTMLButtonElement;
+const effisWarningText = document.getElementById("effis-warning-text") as HTMLElement;
+const effisWarningClose = document.getElementById("effis-warning-close") as HTMLButtonElement;
 
-const activeFiresSourceEffisBtn = document.getElementById(
-  "active-fires-source-effis",
-) as HTMLButtonElement;
-const activeFiresSourceFirmsBtn = document.getElementById(
-  "active-fires-source-firms",
-) as HTMLButtonElement;
+const activeFiresSourceEffisBtn = document.getElementById("active-fires-source-effis") as HTMLButtonElement;
+const activeFiresSourceFirmsBtn = document.getElementById("active-fires-source-firms") as HTMLButtonElement;
+const activeFiresSourceInfoBtn = document.querySelector(".info-btn") as HTMLButtonElement;
+const activeFiresSourceInfo = document.getElementById("active-fires-source-info") as HTMLElement;
 
-const searchContainer = document.getElementById(
-  "search-container",
-) as HTMLElement;
+const searchContainer = document.getElementById("search-container") as HTMLElement;
 const searchInput = document.getElementById("search-input") as HTMLInputElement;
 const searchBtn = document.getElementById("search-btn") as HTMLButtonElement;
-const mapLoadingIndicator = document.getElementById(
-  "map-loading-indicator",
-) as HTMLElement;
-const providerFallbackStatus = document.getElementById(
-  "provider-fallback-status",
-) as HTMLElement;
-const searchResults = document.getElementById(
-  "search-results",
-) as HTMLUListElement;
+const mapLoadingIndicator = document.getElementById("map-loading-indicator") as HTMLElement;
+const providerFallbackStatus = document.getElementById("provider-fallback-status") as HTMLElement;
+const searchResults = document.getElementById("search-results") as HTMLUListElement;
 
 const langBtn = document.getElementById("lang-btn") as HTMLButtonElement;
 const langMenu = document.getElementById("lang-menu") as HTMLElement;
-const langOptions = document.querySelectorAll(
-  ".lang-option",
-) as NodeListOf<HTMLButtonElement>;
+const langOptions = document.querySelectorAll(".lang-option") as NodeListOf<HTMLButtonElement>;
 
 const aboutBtn = document.getElementById("about-btn") as HTMLButtonElement;
 const aboutModal = document.getElementById("about-modal") as HTMLElement;
-const aboutCloseBtn = document.getElementById(
-  "about-close",
-) as HTMLButtonElement;
+const aboutCloseBtn = document.getElementById("about-close") as HTMLButtonElement;
 
 const legendBtn = document.getElementById("legend-btn") as HTMLButtonElement;
 const legendCard = document.getElementById("legend-card") as HTMLElement;
-const legendCloseBtn = document.getElementById(
-  "legend-close",
-) as HTMLButtonElement;
+const legendCloseBtn = document.getElementById("legend-close") as HTMLButtonElement;
 
 let mode: Mode = restoredSession?.mode ?? "current";
 let requestId = 0;
-let currentBasemap: BasemapKind =
-  restoredSession?.basemap ??
-  (config.defaultBasemap as BasemapKind) ??
-  "plain";
+let currentBasemap: BasemapKind = restoredSession?.basemap ?? (config.defaultBasemap as BasemapKind) ?? "plain";
 let currentEffisHealth: EffisHealth = "ok";
 let dismissedEffisHealth: EffisHealth | null = null;
 let activeFiresProvider: "effis" | "firms" = "effis";
@@ -269,21 +192,22 @@ const legendController = createLegendController({
   }),
   translate: t,
 });
-installLanguageSwitcher(
-  { button: langBtn, menu: langMenu, options: langOptions },
-  (language) => {
-    measurementTool.refreshTooltip();
-    refreshEffisWarningText();
-    setPlaceLabelsLanguage(map, language);
-    loadFires();
-    updateLegend();
-  },
-);
+installLanguageSwitcher({ button: langBtn, menu: langMenu, options: langOptions }, (language) => {
+  measurementTool.refreshTooltip();
+  refreshEffisWarningText();
+  setPlaceLabelsLanguage(map, language);
+  loadFires();
+  updateLegend();
+});
 installAboutModal({
   button: aboutBtn,
   modal: aboutModal,
   closeButton: aboutCloseBtn,
   backdrop: sheetBackdrop,
+});
+installInfoPopover({
+  trigger: activeFiresSourceInfoBtn,
+  popover: activeFiresSourceInfo,
 });
 installLayersSheet({
   trigger: layersBtn,
@@ -302,11 +226,7 @@ let loadingIndicatorHideTimer: number | undefined;
 let loadingIndicatorSafetyTimer: number | undefined;
 let fireFetchesInFlight = 0;
 const loadingWmtsSources = new Set<string>();
-const EFFIS_WMTS_SOURCE_IDS = new Set<string>([
-  ...ACTIVE_FIRES_LAYER_IDS,
-  ...BURNT_AREAS_LAYER_IDS,
-  PAST_FIRES_LAYER_ID,
-]);
+const EFFIS_WMTS_SOURCE_IDS = new Set<string>([...ACTIVE_FIRES_LAYER_IDS, ...BURNT_AREAS_LAYER_IDS, PAST_FIRES_LAYER_ID]);
 // EFFIS raster sources can enter a sustained error/retry loop, so even this
 // fire-data-only indicator needs a hard ceiling rather than trusting every
 // source to eventually emit a clean completion event.
@@ -370,8 +290,7 @@ map.on("sourcedata", (event) => {
   if (
     event.sourceId &&
     EFFIS_WMTS_SOURCE_IDS.has(event.sourceId) &&
-    (event.isSourceLoaded ||
-      (map.getSource(event.sourceId) && map.isSourceLoaded(event.sourceId)))
+    (event.isSourceLoaded || (map.getSource(event.sourceId) && map.isSourceLoaded(event.sourceId)))
   ) {
     loadingWmtsSources.delete(event.sourceId);
     updateFireLoadingIndicator();
@@ -387,10 +306,7 @@ map.on("error", (event) => {
 
 // Set initial basemap selection in UI
 for (const option of basemapOptions) {
-  option.setAttribute(
-    "aria-checked",
-    String(option.dataset.basemap === currentBasemap),
-  );
+  option.setAttribute("aria-checked", String(option.dataset.basemap === currentBasemap));
 }
 
 map.on("load", () => {
@@ -504,20 +420,6 @@ function updateCurrentFiresDayRange(days: number): void {
   }
 }
 
-const activeFiresSourceInfoBtn = document.querySelector(
-  ".info-btn",
-) as HTMLButtonElement | null;
-if (activeFiresSourceInfoBtn) {
-  activeFiresSourceInfoBtn.addEventListener("click", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const text = activeFiresSourceInfoBtn.getAttribute("aria-label");
-    if (text) {
-      alert(text);
-    }
-  });
-}
-
 compassBtn.addEventListener("click", () => {
   map.resetNorthPitch();
 });
@@ -619,9 +521,7 @@ function disengageFirmsFallback(): void {
   updateActiveFiresSourceUi();
   backgroundWork.syncFirmsPolling();
   ++firmsRequestId; // invalidate any in-flight refresh so a late response can't overwrite state after we've moved on
-  (map.getSource(FIRMS_SOURCE_ID) as GeoJSONSource | undefined)?.setData(
-    emptyCollection(),
-  );
+  (map.getSource(FIRMS_SOURCE_ID) as GeoJSONSource | undefined)?.setData(emptyCollection());
   addActiveFiresLayers(map);
   applyModeVisibility();
   updateLegend();
@@ -634,9 +534,7 @@ async function refreshFirmsData(): Promise<void> {
     const data = await fetchActiveFiresFallback(EUROPE_BBOX, currentDaysRange);
     if (thisRequest !== firmsRequestId) return; // stale-response guard, same pattern as loadFires()
     logFirmsFeatureCounts(data, currentDaysRange);
-    (map.getSource(FIRMS_SOURCE_ID) as GeoJSONSource | undefined)?.setData(
-      data,
-    );
+    (map.getSource(FIRMS_SOURCE_ID) as GeoJSONSource | undefined)?.setData(data);
     backgroundWork.recordFirmsRefresh();
   } finally {
     endFireFetch();
@@ -719,10 +617,7 @@ function watchWmtsActivity(): void {
   }, INITIAL_LOAD_TIMEOUT_MS);
 
   for (const kind of WMTS_PROBE_LAYERS) {
-    const url = tileTemplate(kind)
-      .replace("{z}", "5")
-      .replace("{x}", "15")
-      .replace("{y}", "11");
+    const url = tileTemplate(kind).replace("{z}", "5").replace("{x}", "15").replace("{y}", "11");
     fetch(url, { signal: controller.signal })
       .then((response) => {
         if (settled || !response.ok) return;
@@ -740,9 +635,7 @@ function watchWmtsActivity(): void {
 function addFireLayer(map: MaplibreMap): void {
   map.addSource(FIRE_SOURCE_ID, { type: "geojson", data: emptyCollection() });
 
-  const firstSymbolLayer = map
-    .getStyle()
-    .layers?.find((layer) => layer.type === "symbol");
+  const firstSymbolLayer = map.getStyle().layers?.find((layer) => layer.type === "symbol");
 
   map.addLayer(
     {
@@ -773,13 +666,7 @@ function addFireLayer(map: MaplibreMap): void {
 async function handleBasemapChange(kind: BasemapKind) {
   setStatus(t("loading_style"));
   try {
-    await setBasemap(
-      map,
-      kind,
-      placeLabelsCheckbox.checked,
-      getLanguage(),
-      activeFiresProvider === "effis",
-    );
+    await setBasemap(map, kind, placeLabelsCheckbox.checked, getLanguage(), activeFiresProvider === "effis");
   } catch (err) {
     console.warn("Failed to switch basemap:", err);
     setStatus(t("error_basemap"), "error");
@@ -788,10 +675,7 @@ async function handleBasemapChange(kind: BasemapKind) {
 
   currentBasemap = kind;
   for (const option of basemapOptions) {
-    option.setAttribute(
-      "aria-checked",
-      String(option.dataset.basemap === kind),
-    );
+    option.setAttribute("aria-checked", String(option.dataset.basemap === kind));
   }
 
   addFireLayer(map);
@@ -826,11 +710,7 @@ function restorePersistedControls(): void {
     activeFiresCheckbox.checked = restoredSession.activeFiresVisible;
     burntAreasCheckbox.checked = restoredSession.burntAreasVisible;
     placeLabelsCheckbox.checked = restoredSession.placeLabelsVisible;
-    if (
-      Array.from(yearSelect.options).some(
-        (option) => option.value === restoredSession.year,
-      )
-    ) {
+    if (Array.from(yearSelect.options).some((option) => option.value === restoredSession.year)) {
       yearSelect.value = restoredSession.year;
     }
   }
@@ -865,57 +745,30 @@ function applyModeVisibility() {
   const burntAreasVisible = mode === "current" && burntAreasCheckbox.checked;
   for (const id of BURNT_AREAS_LAYER_IDS) {
     if (map.getLayer(id)) {
-      map.setLayoutProperty(
-        id,
-        "visibility",
-        burntAreasVisible ? "visible" : "none",
-      );
+      map.setLayoutProperty(id, "visibility", burntAreasVisible ? "visible" : "none");
     }
   }
 
   const activeFiresVisible = mode === "current" && activeFiresCheckbox.checked;
-  const showEffisActiveFires =
-    activeFiresVisible && activeFiresProvider === "effis";
-  const showFirmsActiveFires =
-    activeFiresVisible && activeFiresProvider === "firms";
+  const showEffisActiveFires = activeFiresVisible && activeFiresProvider === "effis";
+  const showFirmsActiveFires = activeFiresVisible && activeFiresProvider === "firms";
   for (const id of ACTIVE_FIRES_LAYER_IDS) {
     if (map.getLayer(id)) {
-      map.setLayoutProperty(
-        id,
-        "visibility",
-        showEffisActiveFires ? "visible" : "none",
-      );
+      map.setLayoutProperty(id, "visibility", showEffisActiveFires ? "visible" : "none");
     }
   }
-  map.setLayoutProperty(
-    FIRMS_GLOW_LAYER_ID,
-    "visibility",
-    showFirmsActiveFires ? "visible" : "none",
-  );
-  map.setLayoutProperty(
-    FIRMS_LAYER_ID,
-    "visibility",
-    showFirmsActiveFires ? "visible" : "none",
-  );
-  map.setLayoutProperty(
-    FIRMS_MODIS_LAYER_ID,
-    "visibility",
-    showFirmsActiveFires ? "visible" : "none",
-  );
+  map.setLayoutProperty(FIRMS_GLOW_LAYER_ID, "visibility", showFirmsActiveFires ? "visible" : "none");
+  map.setLayoutProperty(FIRMS_LAYER_ID, "visibility", showFirmsActiveFires ? "visible" : "none");
+  map.setLayoutProperty(FIRMS_MODIS_LAYER_ID, "visibility", showFirmsActiveFires ? "visible" : "none");
   updateActiveFiresSourceControlState();
 
   const pastVisibility = mode === "past" ? "visible" : "none";
   map.setLayoutProperty(FIRE_FILL_LAYER, "visibility", pastVisibility);
   map.setLayoutProperty(FIRE_OUTLINE_LAYER, "visibility", pastVisibility);
 
-  const pastRasterVisible =
-    mode === "past" && Number(yearSelect.value) >= EARLIEST_WMTS_YEAR;
+  const pastRasterVisible = mode === "past" && Number(yearSelect.value) >= EARLIEST_WMTS_YEAR;
   if (map.getLayer(PAST_FIRES_LAYER_ID)) {
-    map.setLayoutProperty(
-      PAST_FIRES_LAYER_ID,
-      "visibility",
-      pastRasterVisible ? "visible" : "none",
-    );
+    map.setLayoutProperty(PAST_FIRES_LAYER_ID, "visibility", pastRasterVisible ? "visible" : "none");
   }
 }
 
@@ -953,10 +806,7 @@ async function loadFires() {
   } catch (err) {
     if (thisRequest !== requestId) return;
     source.setData(emptyCollection());
-    setStatus(
-      err instanceof EffisError ? err.message : t("error_load_failed"),
-      "error",
-    );
+    setStatus(err instanceof EffisError ? err.message : t("error_load_failed"), "error");
   } finally {
     endFireFetch();
   }

@@ -6,7 +6,7 @@ fires," and NASA FIRMS engages only when EFFIS's active-fires pipeline
 specifically is detected as down (via `watchEffisHealth`'s per-group
 health report — see CLAUDE.md's "NASA FIRMS fallback for Active fires"
 section for the full implementation writeup: `api/firms.ts`, `src/firms.ts`,
-the `effisHealth.ts` per-group refactor, and the orchestration in
+the `effis-health.ts` per-group refactor, and the orchestration in
 `main.ts`). This doc's research and Option A recommendation below are what
 that was built from; kept as-is for the reasoning trail rather than folded
 into CLAUDE.md, which now has the implementation-level detail.

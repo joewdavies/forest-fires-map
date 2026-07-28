@@ -20,6 +20,7 @@
 
 ## Maintainability
 
+- Use kebab-case for file and directory names.
 - Favor clear names, short functions, early returns, and explicit cleanup for
   event listeners, observers, timers, and other long-lived resources.
 - Keep constants close to the subsystem that owns them.

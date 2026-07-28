@@ -289,7 +289,7 @@ native ESM in the browser directly, no target-restricted transpilation).
 purpose, without per-tile precision.** Both current-fires WMTS overlays and
 the past-fires WMTS overlay are plain MapLibre raster sources — no fetch/
 parsing code of ours is in the loop (see the data-flow bullets above), so
-until `src/effisHealth.ts` existed, a failing tile just silently didn't
+until `src/effis-health.ts` existed, a failing tile just silently didn't
 render, with zero visibility to the user or to us. `watchEffisHealth(map,
 onChange)` fixes that at the *aggregate* level (not per-tile — see "Known
 unknowns" below for why per-tile still isn't diagnosable) via two
@@ -312,7 +312,7 @@ at all):
   `ErrorEvent`, but every tile source forwards its own 'error' events up
   through the style to the map with `sourceId` mixed in regardless
   (confirmed by reading maplibre-gl's bundled source, not assumed) — hence
-  the local type cast in `effisHealth.ts`. MapLibre already filters out 404s
+  the local type cast in `effis-health.ts`. MapLibre already filters out 404s
   before firing (an expected "no tile here" response), so anything that
   reaches this handler is a genuine failure (500/504/network error). 4+
   failures within 20s (not a single one — see "Known unknowns" on why a
@@ -611,7 +611,7 @@ principle used by the EFFIS request paths.
   (past fires, 2016+), the WFS pipeline (`fetchHistoricalFires`), and
   property accessors.
 - `src/borders.ts` — fetches + converts the GISCO country-borders topojson.
-- `src/effisHealth.ts` — `watchEffisHealth()`, the "EFFIS is slow/down"
+- `src/effis-health.ts` — `watchEffisHealth()`, the "EFFIS is slow/down"
   detector described above (tile-failure + slow-proxy-response signals),
   reported both as one `overall` value and per-group
   (`activeFires`/`burntAreas`/`pastFires`). Has no UI of its own; `main.ts`
