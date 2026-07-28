@@ -202,6 +202,9 @@ const activeFiresImg = document.getElementById(
 const activeFiresFallback = document.getElementById(
   "legend-fallback-active-fires",
 ) as HTMLElement | null;
+const activeFiresShapesFallback = document.getElementById(
+  "legend-item-active-fires-shapes",
+) as HTMLElement | null;
 const burntAreasImg = document.getElementById(
   "legend-img-burnt-areas",
 ) as HTMLImageElement | null;
@@ -1619,6 +1622,15 @@ function updateLegend() {
     }
   }
 
+  // 1.5 Active fires satellite shapes
+  if (activeFiresShapesFallback) {
+    const showShapes = isCurrentMode && activeFiresCheckbox.checked && useCustomLegend;
+    activeFiresShapesFallback.hidden = !showShapes;
+    if (showShapes) {
+      renderActiveFiresShapesFallback();
+    }
+  }
+
   // 2. Burnt areas / Past fires
   const burntAreasItem = document.getElementById("legend-item-burnt-areas");
   if (burntAreasItem) {
@@ -1755,10 +1767,16 @@ function renderActiveFiresFallback() {
         </div>`;
     }
   });
-  html += `
-    </div>
+  html += `</div>`;
+  activeFiresFallback.innerHTML = html;
+}
+
+function renderActiveFiresShapesFallback() {
+  if (!activeFiresShapesFallback) return;
+  let html = `
     <div class="legend-fallback-section legend-fallback-section-shapes">
-      <h5 class="legend-fallback-heading">${t("legend_satellite")}</h5>`;
+      <h5 class="legend-fallback-heading">${t("legend_satellite")}</h5>
+      <div class="legend-fallback-shapes-row">`;
   legendConfig.activeFires.shapes.forEach((item) => {
     let shapeSvg = "";
     if (item.shape === "triangle") {
@@ -1777,8 +1795,10 @@ function renderActiveFiresFallback() {
         <span class="legend-fallback-label">${label}</span>
       </div>`;
   });
-  html += `</div>`;
-  activeFiresFallback.innerHTML = html;
+  html += `
+      </div>
+    </div>`;
+  activeFiresShapesFallback.innerHTML = html;
 }
 
 function renderBurntAreasFallback() {
