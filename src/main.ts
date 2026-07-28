@@ -846,19 +846,23 @@ layersSheet.addEventListener("touchend", () => {
 function addFireLayer(map: MaplibreMap): void {
   map.addSource(FIRE_SOURCE_ID, { type: "geojson", data: emptyCollection() });
 
+  const firstSymbolLayer = map
+    .getStyle()
+    .layers?.find((layer) => layer.type === "symbol");
+
   map.addLayer({
     id: FIRE_FILL_LAYER,
     type: "fill",
     source: FIRE_SOURCE_ID,
     paint: { "fill-color": "#ff0000", "fill-opacity": 0.6 },
-  });
+  }, firstSymbolLayer?.id);
 
   map.addLayer({
     id: FIRE_OUTLINE_LAYER,
     type: "line",
     source: FIRE_SOURCE_ID,
     paint: { "line-color": "#ff0000", "line-width": 1 },
-  });
+  }, firstSymbolLayer?.id);
 }
 
 /** The NASA FIRMS fallback layer for "Active fires" — see the "NASA FIRMS
@@ -872,6 +876,10 @@ function addFirmsActiveFiresLayer(map: MaplibreMap): void {
     data: emptyCollection(),
     attribution: FIRMS_ATTRIBUTION,
   });
+
+  const firstSymbolLayer = map
+    .getStyle()
+    .layers?.find((layer) => layer.type === "symbol");
 
   // VIIRS -> circles, MODIS -> triangles — the same shape-per-sensor split
   // EFFIS's own legend depicts (legend-config.json's activeFires.shapes),
@@ -930,7 +938,7 @@ function addFirmsActiveFiresLayer(map: MaplibreMap): void {
         0.78,
       ],
     },
-  });
+  }, firstSymbolLayer?.id);
 
   map.addLayer({
     id: FIRMS_LAYER_ID,
@@ -943,7 +951,7 @@ function addFirmsActiveFiresLayer(map: MaplibreMap): void {
       "circle-color": recencyColorExpression(),
       "circle-opacity": 0.9,
     },
-  });
+  }, firstSymbolLayer?.id);
 
   ensureFirmsModisIcon(map);
   map.addLayer({
@@ -962,7 +970,7 @@ function addFirmsActiveFiresLayer(map: MaplibreMap): void {
       "icon-color": recencyColorExpression(),
       "icon-opacity": 0.9,
     },
-  });
+  }, firstSymbolLayer?.id);
 }
 
 /** Draws a small filled triangle and registers it as an SDF icon so the
