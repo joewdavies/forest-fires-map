@@ -355,6 +355,7 @@ currentBtn.addEventListener("click", () => setMode("current"));
 pastBtn.addEventListener("click", () => setMode("past"));
 yearSelect.addEventListener("change", () => {
   if (mode === "past") {
+    setPastFiresYear(map, Number(yearSelect.value));
     loadFires();
     updateLegend();
   }
