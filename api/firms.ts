@@ -74,7 +74,7 @@ export default async function handler(request: Request): Promise<Response> {
       // Roughly matches the client's refresh interval (see
       // FIRMS_REFRESH_INTERVAL_MS in main.ts) — FIRMS sees about one
       // request per cache window regardless of visitor volume.
-      "Cache-Control": "public, max-age=900",
+      "Cache-Control": "public, max-age=900, s-maxage=900, stale-while-revalidate=300",
     },
   });
 }

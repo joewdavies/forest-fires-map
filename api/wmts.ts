@@ -29,7 +29,7 @@ export default async function handler(request: Request): Promise<Response> {
     status: upstream.status,
     headers: {
       "Content-Type": upstream.headers.get("content-type") ?? "application/octet-stream",
-      "Cache-Control": "public, max-age=300",
+      "Cache-Control": "public, max-age=900, s-maxage=1800, stale-while-revalidate=600",
     },
   });
 }
