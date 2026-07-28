@@ -77,6 +77,11 @@ const translations: Record<Language, Record<string, string>> = {
     active_fires_source_effis: "EU",
     active_fires_source_firms: "NASA",
     active_fires_source_tooltip: "EU = EFFIS, NASA = FIRMS",
+    time_period: "Time period",
+    aria_time_period: "Time period",
+    range_1_day: "1 day",
+    range_7_days: "7 days",
+    range_30_days: "30 days",
     provider_fallback_status:
       "EFFIS servers are down. Attempting to retrieve data from an alternative source (NASA FIRMS)…",
     effis_status_slow:
@@ -161,6 +166,11 @@ const translations: Record<Language, Record<string, string>> = {
     active_fires_source_effis: "EU",
     active_fires_source_firms: "NASA",
     active_fires_source_tooltip: "EU = EFFIS, NASA = FIRMS",
+    time_period: "Período de tiempo",
+    aria_time_period: "Período de tiempo",
+    range_1_day: "1 día",
+    range_7_days: "7 días",
+    range_30_days: "30 días",
     provider_fallback_status:
       "Los servidores de EFFIS no están disponibles. Intentando obtener datos de una fuente alternativa (NASA FIRMS)…",
     effis_status_slow:
@@ -246,6 +256,11 @@ const translations: Record<Language, Record<string, string>> = {
     active_fires_source_effis: "EU",
     active_fires_source_firms: "NASA",
     active_fires_source_tooltip: "EU = EFFIS, NASA = FIRMS",
+    time_period: "Zeitraum",
+    aria_time_period: "Zeitraum",
+    range_1_day: "1 Tag",
+    range_7_days: "7 Tage",
+    range_30_days: "30 Tage",
     provider_fallback_status:
       "Die EFFIS-Server sind nicht erreichbar. Daten werden von einer alternativen Quelle (NASA FIRMS) abgerufen…",
     effis_status_slow:
@@ -331,6 +346,11 @@ const translations: Record<Language, Record<string, string>> = {
     active_fires_source_effis: "EU",
     active_fires_source_firms: "NASA",
     active_fires_source_tooltip: "EU = EFFIS, NASA = FIRMS",
+    time_period: "Période",
+    aria_time_period: "Période",
+    range_1_day: "1 jour",
+    range_7_days: "7 jours",
+    range_30_days: "30 jours",
     provider_fallback_status:
       "Les serveurs EFFIS sont indisponibles. Tentative de récupération des données depuis une source alternative (NASA FIRMS)…",
     effis_status_slow:

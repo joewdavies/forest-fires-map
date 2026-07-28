@@ -256,6 +256,14 @@
               <select id="year-select" hidden></select>
 
               <div id="layer-toggle" class="detail-list fire-layer-list" role="group" data-i18n-aria-label="aria_fire_layers" aria-label="Fire layers">
+                <div class="detail-row detail-row-static">
+                  <span class="detail-row-label" data-i18n="time_period">Time period</span>
+                  <div id="current-range-toggle" class="segmented segmented-sm" role="group" data-i18n-aria-label="aria_time_period" aria-label="Time period">
+                    <button type="button" class="segmented-btn" data-days="1" data-i18n="range_1_day">1 day</button>
+                    <button type="button" class="segmented-btn active" data-days="7" aria-pressed="true" data-i18n="range_7_days">7 days</button>
+                    <button type="button" class="segmented-btn" data-days="30" data-i18n="range_30_days">30 days</button>
+                  </div>
+                </div>
                 <label class="detail-row">
                   <span class="detail-row-label" data-i18n="active_fires">Active fires</span>
                   <span class="switch">

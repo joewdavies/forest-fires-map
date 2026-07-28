@@ -119,6 +119,10 @@ const placeLabelsCheckbox = document.getElementById(
   "toggle-place-labels",
 ) as HTMLInputElement;
 
+let currentDaysRange = 7;
+const currentRangeToggle = document.getElementById("current-range-toggle") as HTMLElement;
+const currentRangeBtns = currentRangeToggle.querySelectorAll("button") as NodeListOf<HTMLButtonElement>;
+
 const layersBtn = document.getElementById("layers-btn") as HTMLButtonElement;
 const layersSheet = document.getElementById("layers-sheet") as HTMLElement;
 const sheetCloseBtn = document.getElementById(
@@ -380,6 +384,50 @@ for (const option of basemapOptions) {
   });
 }
 
+currentRangeBtns.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const days = Number(btn.dataset.days);
+    if (days === currentDaysRange) return;
+
+    currentDaysRange = days;
+
+    // Update active state in UI
+    currentRangeBtns.forEach((b) => {
+      const active = Number(b.dataset.days) === currentDaysRange;
+      b.classList.toggle("active", active);
+      b.setAttribute("aria-pressed", String(active));
+    });
+
+    // Update map layer tiles
+    updateCurrentFiresDayRange(currentDaysRange);
+
+    // If provider is firms, trigger data refresh
+    if (activeFiresProvider === "firms") {
+      void refreshFirmsData();
+    }
+
+    // Legend might need updating
+    updateLegend();
+  });
+});
+
+function updateCurrentFiresDayRange(days: number): void {
+  // Update Burnt Areas
+  for (const id of BURNT_AREAS_LAYER_IDS) {
+    const source = map.getSource(id) as any;
+    if (source && typeof source.setTiles === "function") {
+      source.setTiles([tileTemplate(id, days)]);
+    }
+  }
+  // Update Active Fires
+  for (const id of ACTIVE_FIRES_LAYER_IDS) {
+    const source = map.getSource(id) as any;
+    if (source && typeof source.setTiles === "function") {
+      source.setTiles([tileTemplate(id, days)]);
+    }
+  }
+}
+
 layersBtn.addEventListener("click", () => {
   if (layersSheet.classList.contains("open")) {
     closeSheet();
@@ -546,7 +594,7 @@ async function refreshFirmsData(): Promise<void> {
   const thisRequest = ++firmsRequestId;
   beginFireFetch();
   try {
-    const data = await fetchActiveFiresFallback(EUROPE_BBOX);
+    const data = await fetchActiveFiresFallback(EUROPE_BBOX, currentDaysRange);
     if (thisRequest !== firmsRequestId) return; // stale-response guard, same pattern as loadFires()
     (map.getSource(FIRMS_SOURCE_ID) as GeoJSONSource | undefined)?.setData(
       data,
@@ -1688,11 +1736,24 @@ function renderActiveFiresFallback() {
     <div class="legend-fallback-section legend-fallback-section-colors">
       <h5 class="legend-fallback-heading">${t("legend_age")}</h5>`;
   legendConfig.activeFires.colors.forEach((item) => {
-    html += `
-      <div class="legend-fallback-row">
-        <span class="legend-fallback-color" style="background-color: ${item.color};"></span>
-        <span class="legend-fallback-label">${t(item.labelKey)}</span>
-      </div>`;
+    const isLastItem = item.labelKey === "legend_last_7_days";
+    if (isLastItem) {
+      if (currentDaysRange === 1) {
+        return; // Skip showing "Last 7 days" if we are only querying 1 day
+      }
+      const label = currentDaysRange === 30 ? t("legend_last_30_days") : t("legend_last_7_days");
+      html += `
+        <div class="legend-fallback-row">
+          <span class="legend-fallback-color" style="background-color: ${item.color};"></span>
+          <span class="legend-fallback-label">${label}</span>
+        </div>`;
+    } else {
+      html += `
+        <div class="legend-fallback-row">
+          <span class="legend-fallback-color" style="background-color: ${item.color};"></span>
+          <span class="legend-fallback-label">${t(item.labelKey)}</span>
+        </div>`;
+    }
   });
   html += `
     </div>
@@ -1731,6 +1792,10 @@ function renderBurntAreasFallback() {
     mode === "past" ? legendConfig.pastFires.colors : legendConfig.burntAreas.colors;
   let html = `<div class="legend-fallback-section">`;
   colors.forEach((item) => {
+    if (mode === "current") {
+      if (item.labelKey === "legend_last_7_days" && currentDaysRange < 7) return;
+      if (item.labelKey === "legend_last_30_days" && currentDaysRange < 30) return;
+    }
     html += `
       <div class="legend-fallback-row">
         <span class="legend-fallback-swatch" style="background-color: ${item.color}; border: 1.5px solid ${item.borderColor};"></span>

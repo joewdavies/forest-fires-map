@@ -200,17 +200,16 @@ const WMTS_LAYERS: Record<WmtsLayerKind, string> = {
 };
 
 const EFFIS_WMTS_PROXY = "/api/wmts";
-const WMTS_TIME_WINDOW_DAYS = 7;
 
 /** EFFIS's `.week` WMTS layers aren't declared with a time Dimension in
  * their own WMTSCapabilities (no server-advertised default), but the real
  * viewer still sends an explicit rolling `time=<from>/<to>` range on every
  * request — mirrored here as "today back 6 days" since that's the only
  * value confirmed (via the HAR capture) to return current data. */
-function currentTimeRange(): string {
+function currentTimeRange(days: number = 7): string {
   const to = new Date();
   const from = new Date(to);
-  from.setDate(from.getDate() - (WMTS_TIME_WINDOW_DAYS - 1));
+  from.setDate(from.getDate() - (days - 1));
   const iso = (d: Date) => d.toISOString().slice(0, 10);
   return `${iso(from)}/${iso(to)}`;
 }
@@ -227,7 +226,7 @@ function currentTimeRange(): string {
  * z as EFFIS's TileMatrix identifier for a given view; get that mismatched
  * and tiles would fetch the wrong area, not error).
  */
-export function tileTemplate(kind: WmtsLayerKind): string {
+export function tileTemplate(kind: WmtsLayerKind, days: number = 7): string {
   const params = new URLSearchParams({
     layer: WMTS_LAYERS[kind],
     tilematrixset: "EPSG3857",
@@ -235,7 +234,7 @@ export function tileTemplate(kind: WmtsLayerKind): string {
     Request: "GetTile",
     Version: "1.0.0",
     Format: "image/png",
-    time: currentTimeRange(),
+    time: currentTimeRange(days),
   });
   // {z}/{x}/{y} must stay literal (not URL-encoded) for MapLibre to find
   // and substitute them, so they're appended after URLSearchParams rather
