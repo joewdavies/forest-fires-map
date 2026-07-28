@@ -3,16 +3,13 @@ import {
   t,
   getLanguage,
   setLanguage,
-  type Language,
 } from "./i18n";
 import { inject } from "@vercel/analytics";
 import { injectSpeedInsights } from "@vercel/speed-insights";
 import "./style.css";
-import legendConfig from "./legend-config.json";
 import config from "../config.json";
 import {
   Popup,
-  type ExpressionSpecification,
   type GeoJSONSource,
   type LngLat,
   type Map as MaplibreMap,
@@ -52,36 +49,40 @@ import {
 import {
   fetchActiveFiresFallback,
   EUROPE_BBOX,
-  FIRMS_ATTRIBUTION,
 } from "./firms";
+import {
+  installAppLifecycle,
+  loadPersistedAppState,
+  restoreMapCamera,
+  type PersistedAppState,
+} from "./core/lifecycle/appLifecycle";
+import { createBackgroundWorkController } from "./core/lifecycle/backgroundWork";
+import {
+  installDevelopmentPerformanceTelemetry,
+  logFirmsFeatureCounts,
+} from "./core/telemetry/performanceTelemetry";
+import {
+  addFirmsActiveFiresLayer,
+  FIRMS_GLOW_LAYER_ID,
+  FIRMS_LAYER_ID,
+  FIRMS_MODIS_LAYER_ID,
+  FIRMS_SOURCE_ID,
+} from "./map/layers/firmsActiveFires";
+import { installLayersSheet } from "./ui/layersSheet";
+import { installPlaceSearch } from "./features/search/placeSearch";
+import { createMeasurementTool } from "./features/measurement/measurementTool";
+import { createLegendController } from "./features/legend/legendController";
+import { installLanguageSwitcher } from "./ui/languageSwitcher";
+import { installAboutModal } from "./ui/aboutModal";
 
 inject();
 injectSpeedInsights();
 
+const restoredSession = loadPersistedAppState();
 const FIRE_SOURCE_ID = "fires";
 const FIRE_FILL_LAYER = "fires-fill";
 const FIRE_OUTLINE_LAYER = "fires-outline";
-const MEASURE_SOURCE_ID = "distance-measurement";
-const MEASURE_LINE_LAYER_ID = "distance-measurement-line";
-const MEASURE_POINT_LAYER_ID = "distance-measurement-points";
 const EARLIEST_YEAR = 2000;
-const FIRMS_SOURCE_ID = "active-fires-firms";
-const FIRMS_GLOW_LAYER_ID = "active-fires-firms-glow";
-const FIRMS_LAYER_ID = "active-fires-firms-circles";
-const FIRMS_MODIS_LAYER_ID = "active-fires-firms-modis";
-const FIRMS_MODIS_ICON_ID = "firms-modis-triangle";
-// At continental zooms, individual detections are too small to distinguish
-// and expensive to draw. Keep the heatmap visible at every zoom, but only
-// introduce the sensor-specific markers at zoom 7.
-const FIRMS_DETAIL_MIN_ZOOM = 7;
-// Smoothly scale FIRMS markers with zoom. Each pair is [zoom, radius in px];
-// both VIIRS circles and MODIS triangles derive their size from these stops.
-const FIRMS_POINT_RADIUS_STOPS = [
-  [3, 1],
-  [6, 2],
-  [10, 2],
-  [14, 3],
-] as const;
 const FIRMS_REFRESH_INTERVAL_MS = 15 * 60 * 1000;
 // The rolling-window "down" threshold in effisHealth.ts (4 failures/20s) is
 // tuned for detecting sustained degradation, and needs an actual error
@@ -91,70 +92,6 @@ const FIRMS_REFRESH_INTERVAL_MS = 15 * 60 * 1000;
 // nothing at all has come back from EFFIS's WMTS mount within 4s of the
 // page loading, don't wait around for the failure counter to catch up.
 const INITIAL_LOAD_TIMEOUT_MS = 10_000;
-
-/** Lightweight, development-only telemetry for comparing map interaction
- * before and after rendering changes. It samples animation-frame intervals
- * only while the map is moving and prints one summary per interaction. */
-function installDevelopmentPerformanceTelemetry(map: MaplibreMap): void {
-  if (!import.meta.env.DEV) return;
-
-  let measuring = false;
-  let frameTimes: number[] = [];
-
-  map.on("movestart", () => {
-    if (measuring) return;
-    measuring = true;
-    frameTimes = [];
-  });
-
-  map.on("render", () => {
-    if (measuring) frameTimes.push(performance.now());
-  });
-
-  map.on("moveend", () => {
-    if (!measuring) return;
-    measuring = false;
-
-    const intervals = frameTimes
-      .slice(1)
-      .map((time, index) => time - frameTimes[index])
-      .sort((a, b) => a - b);
-    if (intervals.length === 0) return;
-
-    const averageMs =
-      intervals.reduce((total, interval) => total + interval, 0) /
-      intervals.length;
-    const percentile95Ms =
-      intervals[
-        Math.min(intervals.length - 1, Math.floor(intervals.length * 0.95))
-      ];
-
-    console.table({
-      "Map interaction": {
-        zoom: map.getZoom().toFixed(2),
-        frames: intervals.length,
-        "average frame (ms)": averageMs.toFixed(1),
-        "p95 frame (ms)": percentile95Ms.toFixed(1),
-        "estimated FPS": (1000 / averageMs).toFixed(1),
-      },
-    });
-  });
-}
-
-function logFirmsFeatureCounts(data: FeatureCollection): void {
-  if (!import.meta.env.DEV) return;
-
-  const bySource: Record<string, number> = {};
-  for (const feature of data.features) {
-    const source = String(feature.properties?.source ?? "unknown");
-    bySource[source] = (bySource[source] ?? 0) + 1;
-  }
-
-  console.info(
-    `[FIRMS] Loaded ${data.features.length.toLocaleString()} detections for ${currentDaysRange} day(s).`,
-  );
-  console.table(bySource);
-}
 
 // Linked from the word "EFFIS" in the health warning banner (see
 // effis_status_slow/effis_status_down below) — deliberately a *direct*
@@ -187,7 +124,7 @@ const placeLabelsCheckbox = document.getElementById(
   "toggle-place-labels",
 ) as HTMLInputElement;
 
-let currentDaysRange = 7;
+let currentDaysRange = restoredSession?.daysRange ?? 7;
 const currentRangeToggle = document.getElementById(
   "current-range-toggle",
 ) as HTMLElement;
@@ -266,48 +203,99 @@ const legendCard = document.getElementById("legend-card") as HTMLElement;
 const legendCloseBtn = document.getElementById(
   "legend-close",
 ) as HTMLButtonElement;
-const mobileLegendMediaQuery = window.matchMedia("(max-width: 768px)");
 
-const activeFiresImg = document.getElementById(
-  "legend-img-active-fires",
-) as HTMLImageElement | null;
-const activeFiresFallback = document.getElementById(
-  "legend-fallback-active-fires",
-) as HTMLElement | null;
-const activeFiresShapesFallback = document.getElementById(
-  "legend-item-active-fires-shapes",
-) as HTMLElement | null;
-const burntAreasImg = document.getElementById(
-  "legend-img-burnt-areas",
-) as HTMLImageElement | null;
-const burntAreasFallback = document.getElementById(
-  "legend-fallback-burnt-areas",
-) as HTMLElement | null;
-
-let mode: Mode = "current";
+let mode: Mode = restoredSession?.mode ?? "current";
 let requestId = 0;
 let currentBasemap: BasemapKind =
-  (config.defaultBasemap as BasemapKind) || "plain";
-let measurementActive = false;
-let measurementStart: LngLat | null = null;
-let measurementEnd: LngLat | null = null;
-let measurementPreview: LngLat | null = null;
+  restoredSession?.basemap ??
+  (config.defaultBasemap as BasemapKind) ??
+  "plain";
 let currentEffisHealth: EffisHealth = "ok";
 let dismissedEffisHealth: EffisHealth | null = null;
 let activeFiresProvider: "effis" | "firms" = "effis";
-let firmsRefreshTimer: number | undefined;
 let firmsRequestId = 0;
+let stopAppLifecycle: (() => void) | undefined;
 
 populateYearSelect();
+restorePersistedControls();
 
-initTranslations();
+if (restoredSession) setLanguage(restoredSession.language);
+else initTranslations();
 
 const map = await createMap(mapContainer, currentBasemap, getLanguage());
+map.once("load", () => restoreMapCamera(map, restoredSession));
 installDevelopmentPerformanceTelemetry(map);
+const backgroundWork = createBackgroundWorkController({
+  firmsRefreshIntervalMs: FIRMS_REFRESH_INTERVAL_MS,
+  isFirmsActive: () => activeFiresProvider === "firms",
+  refreshFirmsData,
+  watchEffisHealth: () => watchEffisHealth(map, handleEffisHealthChange),
+});
 const popup = new Popup({
   closeButton: true,
   closeOnClick: true,
   maxWidth: "280px",
+});
+const measurementTool = createMeasurementTool({
+  map,
+  elements: {
+    mapContainer,
+    button: measureBtn,
+    closeButton: measureCloseBtn,
+    tooltip: measureTooltip,
+    tooltipText: measureTooltipText,
+  },
+  translate: t,
+  getLocale: getLanguage,
+  closePopup: () => popup.remove(),
+});
+const legendController = createLegendController({
+  map,
+  elements: {
+    button: legendBtn,
+    card: legendCard,
+    closeButton: legendCloseBtn,
+    mapContainer,
+    loadingIndicator: mapLoadingIndicator,
+  },
+  useCustomLegend: config.legendType === "custom",
+  getState: () => ({
+    mode,
+    year: yearSelect.value,
+    daysRange: currentDaysRange,
+    activeFiresVisible: activeFiresCheckbox.checked,
+    burntAreasVisible: burntAreasCheckbox.checked,
+    activeFiresProvider,
+  }),
+  translate: t,
+});
+installLanguageSwitcher(
+  { button: langBtn, menu: langMenu, options: langOptions },
+  (language) => {
+    measurementTool.refreshTooltip();
+    refreshEffisWarningText();
+    setPlaceLabelsLanguage(map, language);
+    loadFires();
+    updateLegend();
+  },
+);
+installAboutModal({
+  button: aboutBtn,
+  modal: aboutModal,
+  closeButton: aboutCloseBtn,
+  backdrop: sheetBackdrop,
+});
+installLayersSheet({
+  trigger: layersBtn,
+  sheet: layersSheet,
+  closeButton: sheetCloseBtn,
+  backdrop: sheetBackdrop,
+});
+installPlaceSearch(map, {
+  container: searchContainer,
+  input: searchInput,
+  button: searchBtn,
+  results: searchResults,
 });
 
 let loadingIndicatorHideTimer: number | undefined;
@@ -408,23 +396,35 @@ for (const option of basemapOptions) {
 map.on("load", () => {
   addFireLayer(map);
   addFirmsActiveFiresLayer(map);
-  addMeasurementLayers();
-  watchEffisHealth(map, handleEffisHealthChange);
+  measurementTool.addLayers();
+  backgroundWork.start();
   watchWmtsActivity();
+  stopAppLifecycle ??= installAppLifecycle({
+    map,
+    captureState: capturePersistedState,
+    pauseBackgroundWork: backgroundWork.pause,
+    resumeBackgroundWork: backgroundWork.resume,
+    reapplyMapState: reapplyLifecycleMapState,
+    onWebglRecoveryChange: (recovering) => {
+      if (recovering) setMapLoading(true);
+      else updateFireLoadingIndicator();
+    },
+  });
 
   map.on("mouseenter", FIRE_FILL_LAYER, () => {
-    if (!measurementActive) map.getCanvas().style.cursor = "pointer";
+    if (!measurementTool.isActive()) map.getCanvas().style.cursor = "pointer";
   });
   map.on("mouseleave", FIRE_FILL_LAYER, () => {
     map.getCanvas().style.cursor = "";
   });
   map.on("click", FIRE_FILL_LAYER, (e: MapLayerMouseEvent) => {
-    if (measurementActive) return;
+    if (measurementTool.isActive()) return;
     const feature = e.features?.[0];
     if (feature) showFirePopup(feature, e.lngLat);
   });
 
   setPastFiresYear(map, Number(yearSelect.value));
+  updateCurrentFiresDayRange(currentDaysRange);
   applyModeVisibility();
   setPlaceLabelsVisible(map, placeLabelsCheckbox.checked, getLanguage());
   loadFires();
@@ -504,19 +504,6 @@ function updateCurrentFiresDayRange(days: number): void {
   }
 }
 
-layersBtn.addEventListener("click", () => {
-  if (layersSheet.classList.contains("open")) {
-    closeSheet();
-  } else {
-    openSheet();
-  }
-});
-sheetCloseBtn.addEventListener("click", closeSheet);
-sheetBackdrop.addEventListener("click", closeSheet);
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && !layersSheet.hidden) closeSheet();
-});
-
 const activeFiresSourceInfoBtn = document.querySelector(
   ".info-btn",
 ) as HTMLButtonElement | null;
@@ -533,42 +520,6 @@ if (activeFiresSourceInfoBtn) {
 
 compassBtn.addEventListener("click", () => {
   map.resetNorthPitch();
-});
-
-measureBtn.addEventListener("click", () => {
-  if (measurementActive) {
-    stopMeasurement();
-  } else {
-    startMeasurement();
-  }
-});
-measureCloseBtn.addEventListener("click", stopMeasurement);
-
-map.on("click", (e) => {
-  if (!measurementActive) return;
-
-  if (!measurementStart || measurementEnd) {
-    measurementStart = e.lngLat;
-    measurementEnd = null;
-    measurementPreview = null;
-    measureTooltipText.textContent = t("measure_choose_end");
-  } else {
-    measurementEnd = e.lngLat;
-    measurementPreview = null;
-    updateMeasurementTooltip(measurementStart, measurementEnd);
-  }
-  updateMeasurementData();
-});
-
-map.on("mousemove", (e) => {
-  if (!measurementActive || !measurementStart || measurementEnd) return;
-  measurementPreview = e.lngLat;
-  updateMeasurementData();
-  updateMeasurementTooltip(measurementStart, measurementPreview);
-});
-
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && measurementActive) stopMeasurement();
 });
 
 map.on("rotate", updateCompass);
@@ -657,10 +608,7 @@ async function engageFirmsFallback(showStartupStatus = false): Promise<void> {
   if (showStartupStatus) providerFallbackStatus.hidden = false;
   try {
     await refreshFirmsData();
-    firmsRefreshTimer = window.setInterval(
-      refreshFirmsData,
-      FIRMS_REFRESH_INTERVAL_MS,
-    );
+    backgroundWork.syncFirmsPolling();
   } finally {
     providerFallbackStatus.hidden = true;
   }
@@ -669,8 +617,7 @@ async function engageFirmsFallback(showStartupStatus = false): Promise<void> {
 function disengageFirmsFallback(): void {
   activeFiresProvider = "effis";
   updateActiveFiresSourceUi();
-  window.clearInterval(firmsRefreshTimer);
-  firmsRefreshTimer = undefined;
+  backgroundWork.syncFirmsPolling();
   ++firmsRequestId; // invalidate any in-flight refresh so a late response can't overwrite state after we've moved on
   (map.getSource(FIRMS_SOURCE_ID) as GeoJSONSource | undefined)?.setData(
     emptyCollection(),
@@ -686,13 +633,46 @@ async function refreshFirmsData(): Promise<void> {
   try {
     const data = await fetchActiveFiresFallback(EUROPE_BBOX, currentDaysRange);
     if (thisRequest !== firmsRequestId) return; // stale-response guard, same pattern as loadFires()
-    logFirmsFeatureCounts(data);
+    logFirmsFeatureCounts(data, currentDaysRange);
     (map.getSource(FIRMS_SOURCE_ID) as GeoJSONSource | undefined)?.setData(
       data,
     );
+    backgroundWork.recordFirmsRefresh();
   } finally {
     endFireFetch();
   }
+}
+
+function reapplyLifecycleMapState(): void {
+  if (!map.isStyleLoaded()) {
+    map.once("styledata", reapplyLifecycleMapState);
+    return;
+  }
+  applyModeVisibility();
+  setPastFiresYear(map, Number(yearSelect.value));
+  setPlaceLabelsVisible(map, placeLabelsCheckbox.checked, getLanguage());
+  updateLegend();
+}
+
+function capturePersistedState(): PersistedAppState {
+  const center = map.getCenter();
+  return {
+    savedAt: Date.now(),
+    camera: {
+      center: [center.lng, center.lat],
+      zoom: map.getZoom(),
+      bearing: map.getBearing(),
+      pitch: map.getPitch(),
+    },
+    mode,
+    year: yearSelect.value,
+    daysRange: currentDaysRange,
+    basemap: currentBasemap,
+    language: getLanguage(),
+    activeFiresVisible: activeFiresCheckbox.checked,
+    burntAreasVisible: burntAreasCheckbox.checked,
+    placeLabelsVisible: placeLabelsCheckbox.checked,
+  };
 }
 
 function updateActiveFiresSourceUi(): void {
@@ -757,232 +737,6 @@ function watchWmtsActivity(): void {
   }
 }
 
-function startMeasurement(): void {
-  measurementActive = true;
-  measurementStart = null;
-  measurementEnd = null;
-  measurementPreview = null;
-  measureBtn.classList.add("active");
-  measureBtn.setAttribute("aria-pressed", "true");
-  mapContainer.classList.add("measuring");
-  measureTooltip.hidden = false;
-  measureTooltipText.textContent = t("measure_choose_start");
-  popup.remove();
-  updateMeasurementData();
-}
-
-function stopMeasurement(): void {
-  measurementActive = false;
-  measurementStart = null;
-  measurementEnd = null;
-  measurementPreview = null;
-  measureBtn.classList.remove("active");
-  measureBtn.setAttribute("aria-pressed", "false");
-  mapContainer.classList.remove("measuring");
-  measureTooltip.hidden = true;
-  updateMeasurementData();
-}
-
-function addMeasurementLayers(): void {
-  if (!map.getSource(MEASURE_SOURCE_ID)) {
-    map.addSource(MEASURE_SOURCE_ID, {
-      type: "geojson",
-      data: measurementCollection(),
-    });
-  }
-  if (!map.getLayer(MEASURE_LINE_LAYER_ID)) {
-    map.addLayer({
-      id: MEASURE_LINE_LAYER_ID,
-      type: "line",
-      source: MEASURE_SOURCE_ID,
-      filter: ["==", ["geometry-type"], "LineString"],
-      paint: {
-        "line-color": "#e25822",
-        "line-width": 3,
-        "line-dasharray": [2, 1],
-      },
-    });
-  }
-  if (!map.getLayer(MEASURE_POINT_LAYER_ID)) {
-    map.addLayer({
-      id: MEASURE_POINT_LAYER_ID,
-      type: "circle",
-      source: MEASURE_SOURCE_ID,
-      filter: ["==", ["geometry-type"], "Point"],
-      paint: {
-        "circle-radius": 6,
-        "circle-color": "#fff",
-        "circle-stroke-color": "#e25822",
-        "circle-stroke-width": 3,
-      },
-    });
-  }
-}
-
-function measurementCollection(): FeatureCollection {
-  const points = [measurementStart, measurementEnd].filter(
-    (point): point is LngLat => point !== null,
-  );
-  const lineEnd = measurementEnd ?? measurementPreview;
-  const features: FeatureCollection["features"] = points.map((point) => ({
-    type: "Feature",
-    properties: {},
-    geometry: { type: "Point", coordinates: [point.lng, point.lat] },
-  }));
-
-  if (measurementStart && lineEnd) {
-    features.unshift({
-      type: "Feature",
-      properties: {},
-      geometry: {
-        type: "LineString",
-        coordinates: [
-          [measurementStart.lng, measurementStart.lat],
-          [lineEnd.lng, lineEnd.lat],
-        ],
-      },
-    });
-  }
-  return { type: "FeatureCollection", features };
-}
-
-function updateMeasurementData(): void {
-  const source = map.getSource(MEASURE_SOURCE_ID) as GeoJSONSource | undefined;
-  source?.setData(measurementCollection());
-}
-
-function updateMeasurementTooltip(start: LngLat, end: LngLat): void {
-  measureTooltipText.textContent = t("measure_distance", {
-    distance: formatDistance(distanceInMetres(start, end)),
-  });
-}
-
-function refreshMeasurementTooltip(): void {
-  if (!measurementActive) return;
-  const lineEnd = measurementEnd ?? measurementPreview;
-  if (measurementStart && lineEnd) {
-    updateMeasurementTooltip(measurementStart, lineEnd);
-  } else {
-    measureTooltipText.textContent = t(
-      measurementStart ? "measure_choose_end" : "measure_choose_start",
-    );
-  }
-}
-
-function distanceInMetres(start: LngLat, end: LngLat): number {
-  const radians = Math.PI / 180;
-  const lat1 = start.lat * radians;
-  const lat2 = end.lat * radians;
-  const deltaLat = (end.lat - start.lat) * radians;
-  const deltaLng = (end.lng - start.lng) * radians;
-  const a =
-    Math.sin(deltaLat / 2) ** 2 +
-    Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLng / 2) ** 2;
-  return 6371008.8 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-function formatDistance(metres: number): string {
-  const locale = getLanguage();
-  if (metres < 1000) {
-    return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(metres)} m`;
-  }
-  const kilometres = metres / 1000;
-  return `${new Intl.NumberFormat(locale, {
-    minimumFractionDigits: kilometres < 10 ? 2 : 1,
-    maximumFractionDigits: kilometres < 10 ? 2 : 1,
-  }).format(kilometres)} km`;
-}
-
-function openSheet() {
-  sheetBackdrop.hidden = false;
-  layersSheet.hidden = false;
-  layersSheet.removeAttribute("inert");
-  requestAnimationFrame(() => {
-    sheetBackdrop.classList.add("open");
-    layersSheet.classList.add("open");
-  });
-  layersBtn.setAttribute("aria-expanded", "true");
-}
-
-function closeSheet() {
-  sheetBackdrop.classList.remove("open");
-  layersSheet.classList.remove("open");
-  layersSheet.style.transform = "";
-  layersSheet.setAttribute("inert", "");
-  layersBtn.setAttribute("aria-expanded", "false");
-  layersSheet.addEventListener(
-    "transitionend",
-    () => {
-      if (layersSheet.classList.contains("open")) return;
-      sheetBackdrop.hidden = true;
-      layersSheet.hidden = true;
-    },
-    { once: true },
-  );
-}
-
-// --- Mobile Swipe Down Gesture for Layers Sheet --------------------
-
-let sheetStartY = 0;
-let sheetCurrentY = 0;
-let sheetIsDragging = false;
-
-layersSheet.addEventListener("touchstart", (e) => {
-  const touch = e.touches[0];
-  const target = e.target as HTMLElement;
-  const isHandle =
-    target.classList.contains("sheet-handle") ||
-    target.closest(".sheet-handle");
-  const isHeader =
-    target.classList.contains("sheet-header") ||
-    target.closest(".sheet-header");
-  const isBasemapGallery =
-    target.classList.contains("basemap-gallery") ||
-    target.closest(".basemap-gallery");
-  const contentEl = layersSheet.querySelector(".sheet-content") as HTMLElement;
-  const isContentAtTop = contentEl ? contentEl.scrollTop === 0 : true;
-
-  if (!isBasemapGallery && (isHandle || isHeader || isContentAtTop)) {
-    sheetStartY = touch.clientY;
-    sheetCurrentY = touch.clientY;
-    sheetIsDragging = true;
-    layersSheet.style.transition = "none";
-  }
-});
-
-layersSheet.addEventListener(
-  "touchmove",
-  (e) => {
-    if (!sheetIsDragging) return;
-    const touch = e.touches[0];
-    sheetCurrentY = touch.clientY;
-    const deltaY = sheetCurrentY - sheetStartY;
-
-    if (deltaY > 0) {
-      // Stop mobile Chrome from interpreting the sheet drag as the
-      // viewport's pull-to-refresh gesture.
-      e.preventDefault();
-      layersSheet.style.transform = `translateY(${deltaY}px)`;
-    }
-  },
-  { passive: false },
-);
-
-layersSheet.addEventListener("touchend", () => {
-  if (!sheetIsDragging) return;
-  sheetIsDragging = false;
-  layersSheet.style.transition = "";
-
-  const deltaY = sheetCurrentY - sheetStartY;
-  if (deltaY > 80) {
-    closeSheet();
-  } else {
-    layersSheet.style.transform = "";
-  }
-  sheetStartY = 0;
-  sheetCurrentY = 0;
-});
-
 function addFireLayer(map: MaplibreMap): void {
   map.addSource(FIRE_SOURCE_ID, { type: "geojson", data: emptyCollection() });
 
@@ -1016,194 +770,6 @@ function addFireLayer(map: MaplibreMap): void {
  * Seeded empty here, same as addFireLayer's FIRE_SOURCE_ID, relying on a
  * later fetch (refreshFirmsData) to populate it rather than a cached
  * variable — consistent with how past-fires WFS data is handled. */
-function addFirmsActiveFiresLayer(map: MaplibreMap): void {
-  map.addSource(FIRMS_SOURCE_ID, {
-    type: "geojson",
-    data: emptyCollection(),
-    attribution: FIRMS_ATTRIBUTION,
-  });
-
-  const firstSymbolLayer = map
-    .getStyle()
-    .layers?.find((layer) => layer.type === "symbol");
-
-  // VIIRS -> circles, MODIS -> triangles — the same shape-per-sensor split
-  // EFFIS's own legend depicts (legend-config.json's activeFires.shapes),
-  // now that each feature carries a `source` property to split on (see
-  // firms.ts's rowsToFeatures; "MODIS_NRT" is MODIS, everything else is one
-  // of the three VIIRS sources).
-  map.addLayer(
-    {
-      id: FIRMS_GLOW_LAYER_ID,
-      type: "heatmap",
-      source: FIRMS_SOURCE_ID,
-      layout: { visibility: "none" },
-      paint: {
-        "heatmap-weight": 1,
-        // prettier-ignore
-        "heatmap-intensity": [
-          "interpolate",
-          ["linear"],
-          ["zoom"],
-          3, 0.08,
-          6, 0.12,
-          10, 0.2,
-          14, 0.3,
-        ],
-        "heatmap-radius": firmsGlowRadiusExpression(),
-        // prettier-ignore
-        "heatmap-color": [
-          "interpolate",
-          ["linear"],
-          ["heatmap-density"],
-          0,    "rgba(255, 214, 64, 0)",
-          0.15, "rgba(255, 214, 64, 0)",
-          0.3,  "rgba(255, 214, 64, 0.5)",
-          0.5,  "rgba(255, 153, 32, 0.75)",
-          0.75, "rgba(239, 68, 35, 0.9)",
-          1,    "rgba(92, 10, 18, 0.98)",
-        ],
-        // "heatmap-opacity": [
-        //   "interpolate",
-        //   ["linear"],
-        //   ["zoom"],
-        //   3,
-        //   0.4,
-        //   6,
-        //   0.55,
-        //   10,
-        //   0.72,
-        //   14,
-        //   0.78,
-        // ],
-      },
-    },
-    firstSymbolLayer?.id,
-  );
-
-  map.addLayer(
-    {
-      id: FIRMS_LAYER_ID,
-      type: "circle",
-      source: FIRMS_SOURCE_ID,
-      minzoom: FIRMS_DETAIL_MIN_ZOOM,
-      filter: ["!=", ["get", "source"], "MODIS_NRT"],
-      layout: { visibility: "none" },
-      paint: {
-        "circle-radius": firmsPointRadiusExpression(),
-        "circle-color": recencyColorExpression(),
-        "circle-opacity": 0.9,
-      },
-    },
-    firstSymbolLayer?.id,
-  );
-
-  ensureFirmsModisIcon(map);
-  map.addLayer(
-    {
-      id: FIRMS_MODIS_LAYER_ID,
-      type: "symbol",
-      source: FIRMS_SOURCE_ID,
-      minzoom: FIRMS_DETAIL_MIN_ZOOM,
-      filter: ["==", ["get", "source"], "MODIS_NRT"],
-      layout: {
-        visibility: "none",
-        "icon-image": FIRMS_MODIS_ICON_ID,
-        "icon-size": firmsIconSizeExpression(),
-        "icon-allow-overlap": true,
-        "icon-ignore-placement": true,
-      },
-      paint: {
-        "icon-color": recencyColorExpression(),
-        "icon-opacity": 0.9,
-      },
-    },
-    firstSymbolLayer?.id,
-  );
-}
-
-/** Draws a small filled triangle and registers it as an SDF icon so the
- * MODIS points layer can recolor it per-feature via icon-color, the same
- * way the VIIRS circle layer recolors via circle-color — MapLibre only
- * supports that for images registered with sdf: true. Re-run on every
- * basemap switch via addFirmsActiveFiresLayer, since setStyle() drops
- * registered images along with every other custom source/layer/image. */
-function ensureFirmsModisIcon(map: MaplibreMap): void {
-  if (map.hasImage(FIRMS_MODIS_ICON_ID)) return;
-  const size = 24;
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return;
-  ctx.fillStyle = "#fff";
-  ctx.beginPath();
-  ctx.moveTo(size / 2, 1);
-  ctx.lineTo(size - 1, size - 1);
-  ctx.lineTo(1, size - 1);
-  ctx.closePath();
-  ctx.fill();
-  map.addImage(FIRMS_MODIS_ICON_ID, ctx.getImageData(0, 0, size, size), {
-    sdf: true,
-  });
-}
-
-/** Colors each FIRMS point by the same recency-tier scheme legend-config.json
- * already defines for the "Active fires" legend (see recencyTierFor in
- * firms.ts) — reusing legendConfig.activeFires.colors directly means the
- * legend swatches and the real map styling can never drift out of sync. */
-function recencyColorExpression(): ExpressionSpecification {
-  const stops = legendConfig.activeFires.colors.flatMap((c) => [
-    c.labelKey,
-    c.color,
-  ]);
-  return [
-    "match",
-    ["get", "recencyTier"],
-    ...stops,
-    "#999999",
-  ] as unknown as ExpressionSpecification;
-}
-
-function firmsPointRadiusExpression(): ExpressionSpecification {
-  return [
-    "interpolate",
-    ["linear"],
-    ["zoom"],
-    ...FIRMS_POINT_RADIUS_STOPS.flat(),
-  ] as ExpressionSpecification;
-}
-
-function firmsIconSizeExpression(): ExpressionSpecification {
-  return [
-    "interpolate",
-    ["linear"],
-    ["zoom"],
-    ...FIRMS_POINT_RADIUS_STOPS.flatMap(([zoom, radius]) => [
-      zoom,
-      (radius * 2) / 24,
-    ]),
-  ] as ExpressionSpecification;
-}
-
-function firmsGlowRadiusExpression(): ExpressionSpecification {
-  return [
-    "interpolate",
-    ["linear"],
-    ["zoom"],
-    3,
-    4,
-    5,
-    6,
-    7,
-    10,
-    10,
-    16,
-    14,
-    20,
-  ] as ExpressionSpecification;
-}
-
 async function handleBasemapChange(kind: BasemapKind) {
   setStatus(t("loading_style"));
   try {
@@ -1230,8 +796,7 @@ async function handleBasemapChange(kind: BasemapKind) {
 
   addFireLayer(map);
   addFirmsActiveFiresLayer(map);
-  addMeasurementLayers();
-  updateMeasurementData();
+  measurementTool.addLayers();
   setPastFiresYear(map, Number(yearSelect.value));
   applyModeVisibility();
   setPlaceLabelsVisible(map, placeLabelsCheckbox.checked, getLanguage());
@@ -1256,18 +821,44 @@ function populateYearSelect() {
   yearSelect.value = String(currentYear - 1);
 }
 
+function restorePersistedControls(): void {
+  if (restoredSession) {
+    activeFiresCheckbox.checked = restoredSession.activeFiresVisible;
+    burntAreasCheckbox.checked = restoredSession.burntAreasVisible;
+    placeLabelsCheckbox.checked = restoredSession.placeLabelsVisible;
+    if (
+      Array.from(yearSelect.options).some(
+        (option) => option.value === restoredSession.year,
+      )
+    ) {
+      yearSelect.value = restoredSession.year;
+    }
+  }
+
+  for (const button of currentRangeBtns) {
+    const active = Number(button.dataset.days) === currentDaysRange;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  }
+  syncModeControls();
+}
+
 function setMode(next: Mode) {
   if (mode === next) return;
   mode = next;
+  syncModeControls();
+  applyModeVisibility();
+  loadFires();
+  updateLegend();
+}
+
+function syncModeControls(): void {
   currentBtn.classList.toggle("active", mode === "current");
   currentBtn.setAttribute("aria-pressed", String(mode === "current"));
   pastBtn.classList.toggle("active", mode === "past");
   pastBtn.setAttribute("aria-pressed", String(mode === "past"));
   yearSelect.hidden = mode !== "past";
   layerToggle.hidden = mode !== "current";
-  applyModeVisibility();
-  loadFires();
-  updateLegend();
 }
 
 function applyModeVisibility() {
@@ -1393,556 +984,6 @@ function showFirePopup(feature: MapGeoJSONFeature, lngLat: LngLat) {
   popup.setLngLat(lngLat).setHTML(html).addTo(map);
 }
 
-// --- Geocoder Search Logic -----------------------------------------
-
-interface GeocodeResult {
-  display_name: string;
-  lat: string;
-  lon: string;
-}
-
-let searchTimeoutId: number | null = null;
-let currentResults: GeocodeResult[] = [];
-
-searchInput.addEventListener("input", () => {
-  if (searchTimeoutId) {
-    clearTimeout(searchTimeoutId);
-  }
-
-  const query = searchInput.value.trim();
-  if (query.length < 2) {
-    searchResults.hidden = true;
-    currentResults = [];
-    return;
-  }
-
-  searchTimeoutId = window.setTimeout(async () => {
-    try {
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`,
-        {
-          headers: {
-            "User-Agent": "European-Forest-Fires-Map-App",
-          },
-        },
-      );
-      if (!response.ok) throw new Error("Search failed");
-      const data = (await response.json()) as GeocodeResult[];
-      currentResults = data;
-      renderSearchResults(data);
-    } catch (err) {
-      console.warn("Geocoding search failed:", err);
-    }
-  }, 300);
-});
-
-function renderSearchResults(results: GeocodeResult[]) {
-  searchResults.innerHTML = "";
-  if (results.length === 0) {
-    searchResults.hidden = true;
-    return;
-  }
-
-  results.forEach((res) => {
-    const li = document.createElement("li");
-    li.textContent = res.display_name;
-    li.addEventListener("click", () => {
-      selectPlace(res);
-    });
-    searchResults.appendChild(li);
-  });
-  searchResults.hidden = false;
-}
-
-function selectPlace(place: GeocodeResult) {
-  const lat = parseFloat(place.lat);
-  const lon = parseFloat(place.lon);
-  if (!isNaN(lat) && !isNaN(lon)) {
-    map.flyTo({ center: [lon, lat], zoom: 10 });
-    searchInput.value = place.display_name;
-    searchResults.hidden = true;
-    searchInput.blur();
-    searchContainer.classList.remove("expanded");
-  }
-}
-
-searchBtn.addEventListener("click", (e) => {
-  const isMobile = window.innerWidth <= 768;
-  if (isMobile && !searchContainer.classList.contains("expanded")) {
-    e.stopPropagation();
-    searchContainer.classList.add("expanded");
-    searchInput.focus();
-  } else {
-    performInstantSearch();
-  }
-});
-searchInput.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") {
-    performInstantSearch();
-  }
-});
-
-async function performInstantSearch() {
-  const query = searchInput.value.trim();
-  if (!query) return;
-
-  if (currentResults.length > 0) {
-    selectPlace(currentResults[0]);
-    return;
-  }
-
-  try {
-    const response = await fetch(
-      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`,
-      {
-        headers: {
-          "User-Agent": "European-Forest-Fires-Map-App",
-        },
-      },
-    );
-    if (!response.ok) return;
-    const data = (await response.json()) as GeocodeResult[];
-    if (data.length > 0) {
-      selectPlace(data[0]);
-    }
-  } catch (err) {
-    console.warn("Instant search failed:", err);
-  }
-}
-
-document.addEventListener("click", (e) => {
-  if (!searchContainer.contains(e.target as Node)) {
-    searchResults.hidden = true;
-    searchContainer.classList.remove("expanded");
-  }
-});
-
-// --- Language Switcher Logic ---------------------------------------
-
-langBtn.addEventListener("click", (e) => {
-  e.stopPropagation();
-  const isOpen = !langMenu.hidden;
-  langMenu.hidden = isOpen;
-  langBtn.classList.toggle("active", !isOpen);
-});
-
-updateActiveLanguageOption();
-
-for (const option of langOptions) {
-  option.addEventListener("click", () => {
-    const lang = option.dataset.lang as Language;
-    if (lang !== getLanguage()) {
-      setLanguage(lang);
-      updateActiveLanguageOption();
-      refreshMeasurementTooltip();
-      refreshEffisWarningText();
-      setPlaceLabelsLanguage(map, lang);
-      loadFires();
-      updateLegend();
-    }
-    langMenu.hidden = true;
-    langBtn.classList.remove("active");
-  });
-}
-
-function updateActiveLanguageOption() {
-  const currentLang = getLanguage();
-  for (const option of langOptions) {
-    const isActive = option.dataset.lang === currentLang;
-    option.classList.toggle("active", isActive);
-    option.setAttribute("aria-selected", String(isActive));
-  }
-}
-
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && !langMenu.hidden) {
-    langMenu.hidden = true;
-    langBtn.classList.remove("active");
-  }
-});
-
-document.addEventListener("click", (e) => {
-  if (
-    !langMenu.hidden &&
-    !langBtn.contains(e.target as Node) &&
-    !langMenu.contains(e.target as Node)
-  ) {
-    langMenu.hidden = true;
-    langBtn.classList.remove("active");
-  }
-});
-
-// --- About Modal Logic ---------------------------------------------
-
-aboutBtn.addEventListener("click", () => {
-  sheetBackdrop.hidden = false;
-  aboutModal.hidden = false;
-  aboutModal.removeAttribute("inert");
-  requestAnimationFrame(() => {
-    sheetBackdrop.classList.add("open");
-    aboutModal.classList.add("open");
-  });
-});
-
-function closeAboutModal() {
-  sheetBackdrop.classList.remove("open");
-  aboutModal.classList.remove("open");
-  aboutModal.setAttribute("inert", "");
-  aboutModal.addEventListener(
-    "transitionend",
-    () => {
-      if (aboutModal.classList.contains("open")) return;
-      sheetBackdrop.hidden = true;
-      aboutModal.hidden = true;
-    },
-    { once: true },
-  );
-}
-
-aboutCloseBtn.addEventListener("click", closeAboutModal);
-
-sheetBackdrop.addEventListener("click", () => {
-  if (!aboutModal.hidden) {
-    closeAboutModal();
-  }
-});
-
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && !aboutModal.hidden) {
-    closeAboutModal();
-  }
-});
-
-// --- Legend Logic --------------------------------------------------
-
-const LOADING_INDICATOR_LEGEND_GAP_PX = 16;
-
-function updateLoadingIndicatorLegendClearance(): void {
-  mapLoadingIndicator.style.removeProperty("--map-loading-indicator-right");
-  mapLoadingIndicator.style.removeProperty("--map-loading-indicator-bottom");
-  if (legendCard.hidden) return;
-
-  const legendStyle = window.getComputedStyle(legendCard);
-  if (mobileLegendMediaQuery.matches) {
-    const bottomInset = Number.parseFloat(legendStyle.bottom) || 0;
-    const desiredBottom =
-      legendCard.offsetHeight + bottomInset + LOADING_INDICATOR_LEGEND_GAP_PX;
-    const maximumBottom = Math.max(
-      0,
-      mapContainer.clientHeight -
-        mapLoadingIndicator.offsetHeight -
-        LOADING_INDICATOR_LEGEND_GAP_PX,
-    );
-    mapLoadingIndicator.style.setProperty(
-      "--map-loading-indicator-bottom",
-      `${Math.min(desiredBottom, maximumBottom)}px`,
-    );
-  } else {
-    const rightInset = Number.parseFloat(legendStyle.right) || 0;
-    const desiredRight =
-      legendCard.offsetWidth + rightInset + LOADING_INDICATOR_LEGEND_GAP_PX;
-    const maximumRight = Math.max(
-      0,
-      mapContainer.clientWidth -
-        mapLoadingIndicator.offsetWidth -
-        LOADING_INDICATOR_LEGEND_GAP_PX,
-    );
-    mapLoadingIndicator.style.setProperty(
-      "--map-loading-indicator-right",
-      `${Math.min(desiredRight, maximumRight)}px`,
-    );
-  }
-}
-
-const loadingIndicatorClearanceObserver = new ResizeObserver(() => {
-  updateLoadingIndicatorLegendClearance();
-});
-loadingIndicatorClearanceObserver.observe(legendCard);
-loadingIndicatorClearanceObserver.observe(mapContainer);
-mobileLegendMediaQuery.addEventListener(
-  "change",
-  updateLoadingIndicatorLegendClearance,
-);
-updateLoadingIndicatorLegendClearance();
-
 function updateLegend() {
-  const isCurrentMode = mode === "current";
-  const useCustomLegend = config.legendType === "custom";
-
-  // 1. Active fires
-  const activeFiresItem = document.getElementById("legend-item-active-fires");
-  if (activeFiresItem) {
-    activeFiresItem.style.display =
-      isCurrentMode && activeFiresCheckbox.checked ? "flex" : "none";
-
-    if (useCustomLegend) {
-      // Use custom legend
-      if (activeFiresImg) {
-        activeFiresImg.hidden = true;
-      }
-      if (activeFiresFallback) {
-        activeFiresFallback.hidden = false;
-        renderActiveFiresFallback();
-      }
-    } else {
-      // Use WMS PNG — src is only ever assigned here, never in the HTML
-      // itself: an <img src="..."> attribute is fetched by the browser the
-      // moment it's parsed, regardless of any JS/config check afterward, so
-      // a static src would hit EFFIS's legend endpoint unconditionally even
-      // when useCustomLegend is true and the image is never shown at all.
-      if (activeFiresImg) {
-        activeFiresImg.hidden = false;
-        activeFiresImg.src =
-          "/api/effis?service=WMS&request=GetLegendGraphic&layer=modis.hs.week&format=image/png";
-      }
-      if (activeFiresFallback) {
-        activeFiresFallback.hidden = true;
-      }
-    }
-
-    const providerNote = document.getElementById(
-      "legend-active-fires-provider",
-    );
-    if (providerNote) {
-      providerNote.hidden = false;
-      if (activeFiresProvider === "firms") {
-        providerNote.setAttribute("data-i18n", "legend_active_fires_via_firms");
-        providerNote.textContent = t("legend_active_fires_via_firms");
-      } else {
-        providerNote.setAttribute("data-i18n", "legend_active_fires_via_effis");
-        providerNote.textContent = t("legend_active_fires_via_effis");
-      }
-    }
-  }
-
-  // 1.5 Active fires satellite shapes
-  if (activeFiresShapesFallback) {
-    const showShapes =
-      isCurrentMode && activeFiresCheckbox.checked && useCustomLegend;
-    activeFiresShapesFallback.hidden = !showShapes;
-    if (showShapes) {
-      renderActiveFiresShapesFallback();
-    }
-  }
-
-  // 2. Burnt areas / Past fires
-  const burntAreasItem = document.getElementById("legend-item-burnt-areas");
-  if (burntAreasItem) {
-    if (useCustomLegend) {
-      // Use custom legend
-      if (burntAreasImg) {
-        burntAreasImg.hidden = true;
-      }
-      if (burntAreasFallback) {
-        burntAreasFallback.hidden = false;
-        renderBurntAreasFallback();
-      }
-    } else {
-      // Use WMS PNG
-      if (burntAreasImg) {
-        burntAreasImg.hidden = false;
-      }
-      if (burntAreasFallback) {
-        burntAreasFallback.hidden = true;
-      }
-    }
-
-    if (isCurrentMode) {
-      const burntAreasAvailable = BURNT_AREAS_LAYER_IDS.some((id) =>
-        Boolean(map.getLayer(id)),
-      );
-      burntAreasItem.style.display =
-        burntAreasCheckbox.checked && burntAreasAvailable ? "flex" : "none";
-      const labelEl = document.getElementById("legend-title-burnt-areas");
-      if (labelEl) {
-        labelEl.setAttribute("data-i18n", "burnt_areas");
-        labelEl.textContent = t("burnt_areas");
-      }
-      if (burntAreasImg && !useCustomLegend) {
-        burntAreasImg.src =
-          "/api/effis?service=WMS&request=GetLegendGraphic&layer=modis.ba.week&format=image/png";
-      }
-    } else {
-      burntAreasItem.style.display = "flex";
-      const labelEl = document.getElementById("legend-title-burnt-areas");
-      if (labelEl) {
-        labelEl.removeAttribute("data-i18n");
-        labelEl.textContent = `${t("burnt_areas")} (${yearSelect.value})`;
-      }
-      if (burntAreasImg && !useCustomLegend) {
-        burntAreasImg.src =
-          "/api/effis?service=WMS&request=GetLegendGraphic&layer=ms:modis.ba.poly&format=image/png";
-      }
-    }
-  }
-
-  const activeFiresShown = isCurrentMode && activeFiresCheckbox.checked;
-  let burntAreasShown = false;
-  if (burntAreasItem) {
-    if (isCurrentMode) {
-      const burntAreasAvailable = BURNT_AREAS_LAYER_IDS.some((id) =>
-        Boolean(map.getLayer(id)),
-      );
-      burntAreasShown = burntAreasCheckbox.checked && burntAreasAvailable;
-    } else {
-      burntAreasShown = true;
-    }
-  }
-
-  const legendBody = document.querySelector(".legend-body");
-  if (legendBody) {
-    if (activeFiresShown && burntAreasShown) {
-      legendBody.classList.add("both-active");
-    } else {
-      legendBody.classList.remove("both-active");
-    }
-  }
-}
-
-legendBtn.addEventListener("click", () => {
-  const isOpen = !legendCard.classList.contains("open");
-  if (isOpen) {
-    legendCard.hidden = false;
-    updateLoadingIndicatorLegendClearance();
-    updateLegend();
-    requestAnimationFrame(() => {
-      legendCard.classList.add("open");
-    });
-  } else {
-    closeLegendCard();
-  }
-});
-
-function closeLegendCard() {
-  legendCard.classList.remove("open");
-  legendCard.addEventListener(
-    "transitionend",
-    () => {
-      if (legendCard.classList.contains("open")) return;
-      legendCard.hidden = true;
-      updateLoadingIndicatorLegendClearance();
-    },
-    { once: true },
-  );
-}
-
-legendCloseBtn.addEventListener("click", closeLegendCard);
-
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && !legendCard.hidden) {
-    closeLegendCard();
-  }
-});
-
-// --- Fallback Legend Render Logic -----------------------------------
-
-function renderActiveFiresFallback() {
-  if (!activeFiresFallback) return;
-  let html = `
-    <div class="legend-fallback-section legend-fallback-section-colors">
-      <h5 class="legend-fallback-heading">${t("legend_age")}</h5>`;
-  legendConfig.activeFires.colors.forEach((item) => {
-    const isLastItem = item.labelKey === "legend_last_7_days";
-    if (isLastItem) {
-      if (currentDaysRange === 1) {
-        return; // Skip showing "Last 7 days" if we are only querying 1 day
-      }
-      const label =
-        currentDaysRange === 30
-          ? t("legend_last_30_days")
-          : t("legend_last_7_days");
-      html += `
-        <div class="legend-fallback-row">
-          <span class="legend-fallback-color" style="background-color: ${item.color};"></span>
-          <span class="legend-fallback-label">${label}</span>
-        </div>`;
-    } else {
-      html += `
-        <div class="legend-fallback-row">
-          <span class="legend-fallback-color" style="background-color: ${item.color};"></span>
-          <span class="legend-fallback-label">${t(item.labelKey)}</span>
-        </div>`;
-    }
-  });
-  html += `</div>`;
-  activeFiresFallback.innerHTML = html;
-}
-
-function renderActiveFiresShapesFallback() {
-  if (!activeFiresShapesFallback) return;
-  let html = `
-    <div class="legend-fallback-section legend-fallback-section-shapes">
-      <h5 class="legend-fallback-heading">${t("legend_satellite")}</h5>
-      <div class="legend-fallback-shapes-row">`;
-  legendConfig.activeFires.shapes.forEach((item) => {
-    let shapeSvg = "";
-    if (item.shape === "triangle") {
-      shapeSvg = `<svg width="12" height="12" viewBox="0 0 24 24" class="legend-fallback-shape" aria-hidden="true" focusable="false"><polygon points="12 2, 22 22, 2 22" fill="#fff" /></svg>`;
-    } else {
-      shapeSvg = `<svg width="12" height="12" viewBox="0 0 24 24" class="legend-fallback-shape" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10" fill="#fff" /></svg>`;
-    }
-    // FIRMS has no Sentinel-3 equivalent (see the "NASA FIRMS fallback"
-    // section in CLAUDE.md), so its VIIRS row drops the "/ SENTINEL3" half
-    // of the label that's accurate for EFFIS's own three-source coverage.
-    const label =
-      activeFiresProvider === "firms" ? item.firmsLabel : item.label;
-    html += `
-      <div class="legend-fallback-row">
-        ${shapeSvg}
-        <span class="legend-fallback-label">${label}</span>
-      </div>`;
-  });
-  html += `
-      </div>
-    </div>`;
-  activeFiresShapesFallback.innerHTML = html;
-}
-
-function renderBurntAreasFallback() {
-  if (!burntAreasFallback) return;
-  // "Last day"/"Last 7 days" describe the *current* burnt-areas WMTS
-  // overlay's recency colouring — meaningless for "Past fires", which
-  // renders a single year's modis.ba.<year> layer in one fixed colour
-  // instead. Swap the whole swatch list on mode rather than filtering it,
-  // so switching modes can't leave a stale mix of the two on screen.
-  const colors =
-    mode === "past"
-      ? legendConfig.pastFires.colors
-      : legendConfig.burntAreas.colors;
-  let html = `<div class="legend-fallback-section">`;
-  colors.forEach((item) => {
-    if (mode === "current") {
-      if (item.labelKey === "legend_last_7_days" && currentDaysRange < 7)
-        return;
-      if (item.labelKey === "legend_last_30_days" && currentDaysRange < 30)
-        return;
-    }
-    html += `
-      <div class="legend-fallback-row">
-        <span class="legend-fallback-swatch" style="background-color: ${item.color}; border: 1.5px solid ${item.borderColor};"></span>
-        <span class="legend-fallback-label">${t(item.labelKey)}</span>
-      </div>`;
-  });
-  html += `</div>`;
-  burntAreasFallback.innerHTML = html;
-}
-
-if (activeFiresImg) {
-  activeFiresImg.addEventListener("error", () => {
-    if (activeFiresImg) activeFiresImg.hidden = true;
-    if (activeFiresFallback) {
-      activeFiresFallback.hidden = false;
-      renderActiveFiresFallback();
-    }
-  });
-}
-
-if (burntAreasImg) {
-  burntAreasImg.addEventListener("error", () => {
-    if (burntAreasImg) burntAreasImg.hidden = true;
-    if (burntAreasFallback) {
-      burntAreasFallback.hidden = false;
-      renderBurntAreasFallback();
-    }
-  });
+  legendController.update();
 }
