@@ -1390,10 +1390,16 @@ body {
 
   #legend-item-active-fires {
     grid-column: 1 / -1;
+    order: 0;
+  }
+
+  #legend-item-burnt-areas {
+    order: 0;
   }
 
   #legend-item-active-fires-shapes {
     grid-column: 1 / -1;
+    order: 0;
   }
 
   #legend-fallback-active-fires {
