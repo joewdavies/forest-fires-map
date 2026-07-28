@@ -124,6 +124,12 @@ export function watchEffisHealth(
     burntAreas: [],
     pastFires: [],
   };
+  const totalByKey: Record<TrackedKey, number[]> = {
+    overall: [],
+    activeFires: [],
+    burntAreas: [],
+    pastFires: [],
+  };
   let lastReport: EffisHealthReport = {
     overall: "ok",
     activeFires: "ok",
@@ -136,20 +142,29 @@ export function watchEffisHealth(
     while (timestamps.length && timestamps[0] < cutoff) timestamps.shift();
   }
 
-  function levelFor(failures: number[], slow: number[]): EffisHealth {
+  function levelFor(failures: number[], slow: number[], total: number[]): EffisHealth {
     prune(failures, FAILURE_WINDOW_MS);
     prune(slow, SLOW_WINDOW_MS);
-    if (failures.length >= FAILURE_THRESHOLD) return "down";
+    prune(total, FAILURE_WINDOW_MS);
+
+    if (failures.length >= FAILURE_THRESHOLD) {
+      const successes = Math.max(0, total.length - failures.length);
+      // If some requests are working successfully, degrade to "slow" rather than declaring the service completely "down"
+      if (successes > 1 && failures.length < total.length * 0.8) {
+        return "slow";
+      }
+      return "down";
+    }
     if (slow.length >= SLOW_THRESHOLD) return "slow";
     return "ok";
   }
 
   function recompute(): void {
     const report: EffisHealthReport = {
-      overall: levelFor(failuresByKey.overall, slowByKey.overall),
-      activeFires: levelFor(failuresByKey.activeFires, slowByKey.activeFires),
-      burntAreas: levelFor(failuresByKey.burntAreas, slowByKey.burntAreas),
-      pastFires: levelFor(failuresByKey.pastFires, slowByKey.pastFires),
+      overall: levelFor(failuresByKey.overall, slowByKey.overall, totalByKey.overall),
+      activeFires: levelFor(failuresByKey.activeFires, slowByKey.activeFires, totalByKey.activeFires),
+      burntAreas: levelFor(failuresByKey.burntAreas, slowByKey.burntAreas, totalByKey.burntAreas),
+      pastFires: levelFor(failuresByKey.pastFires, slowByKey.pastFires, totalByKey.pastFires),
     };
 
     const changed = TRACKED_KEYS.some((key) => report[key] !== lastReport[key]);
@@ -177,14 +192,18 @@ export function watchEffisHealth(
 
   const observer = new PerformanceObserver((list) => {
     for (const entry of list.getEntries()) {
-      if (
-        PROXY_PATH_PATTERN.test(entry.name) &&
-        entry.duration >= SLOW_RESOURCE_MS
-      ) {
+      if (PROXY_PATH_PATTERN.test(entry.name)) {
         const now = Date.now();
-        slowByKey.overall.push(now);
+        totalByKey.overall.push(now);
         for (const group of groupsForResourceUrl(entry.name)) {
-          slowByKey[group].push(now);
+          totalByKey[group].push(now);
+        }
+
+        if (entry.duration >= SLOW_RESOURCE_MS) {
+          slowByKey.overall.push(now);
+          for (const group of groupsForResourceUrl(entry.name)) {
+            slowByKey[group].push(now);
+          }
         }
       }
     }

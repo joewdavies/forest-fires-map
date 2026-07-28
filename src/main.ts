@@ -86,7 +86,7 @@ const FIRMS_REFRESH_INTERVAL_MS = 15 * 60 * 1000;
 // much blunter one-shot check specifically for a cold, silent start: if
 // nothing at all has come back from EFFIS's WMTS mount within 4s of the
 // page loading, don't wait around for the failure counter to catch up.
-const INITIAL_LOAD_TIMEOUT_MS = 4_000;
+const INITIAL_LOAD_TIMEOUT_MS = 10_000;
 
 // Linked from the word "EFFIS" in the health warning banner (see
 // effis_status_slow/effis_status_down below) — deliberately a *direct*
