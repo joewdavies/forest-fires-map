@@ -1,6 +1,10 @@
 # Forest Fires Map
 
 <p align="center">
+  <img src="public/logo.svg" alt="Forest Fires Map Logo" width="120" />
+</p>
+
+<p align="center">
   <a href="https://forest-fires-map.vercel.app/"><strong>Live Demo</strong></a>
 </p>
 
