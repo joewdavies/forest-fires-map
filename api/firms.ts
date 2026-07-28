@@ -43,14 +43,24 @@ export default async function handler(request: Request): Promise<Response> {
   const source = searchParams.get("source") ?? "";
   const bbox = searchParams.get("bbox") ?? "";
   const days = Math.min(10, Math.max(1, Number(searchParams.get("days")) || 1));
+  const date = searchParams.get("date") ?? "";
+
+  const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
   if (!VALID_SOURCES.has(source) || !BBOX_PATTERN.test(bbox)) {
     return new Response("Invalid source or bbox", { status: 400 });
   }
+  if (date && !DATE_PATTERN.test(date)) {
+    return new Response("Invalid date", { status: 400 });
+  }
 
   let upstream: Response;
   try {
-    upstream = await fetch(`${FIRMS_BASE}/${mapKey}/${source}/${bbox}/${days}`, {
+    let url = `${FIRMS_BASE}/${mapKey}/${source}/${bbox}/${days}`;
+    if (date) {
+      url += `/${date}`;
+    }
+    upstream = await fetch(url, {
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
   } catch {

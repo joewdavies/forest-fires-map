@@ -51,7 +51,12 @@ export default defineConfig(({ mode }) => {
             const source = url.searchParams.get("source") ?? "";
             const bbox = url.searchParams.get("bbox") ?? "";
             const days = url.searchParams.get("days") ?? "1";
-            return `/api/area/csv/${env.FIRMS_MAP_KEY ?? ""}/${source}/${bbox}/${days}`;
+            const date = url.searchParams.get("date") ?? "";
+            let targetPath = `/api/area/csv/${env.FIRMS_MAP_KEY ?? ""}/${source}/${bbox}/${days}`;
+            if (date) {
+              targetPath += `/${date}`;
+            }
+            return targetPath;
           },
         },
       },

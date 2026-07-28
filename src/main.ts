@@ -1548,7 +1548,16 @@ function updateLegend() {
     const providerNote = document.getElementById(
       "legend-active-fires-provider",
     );
-    if (providerNote) providerNote.hidden = activeFiresProvider !== "firms";
+    if (providerNote) {
+      providerNote.hidden = false;
+      if (activeFiresProvider === "firms") {
+        providerNote.setAttribute("data-i18n", "legend_active_fires_via_firms");
+        providerNote.textContent = t("legend_active_fires_via_firms");
+      } else {
+        providerNote.setAttribute("data-i18n", "legend_active_fires_via_effis");
+        providerNote.textContent = t("legend_active_fires_via_effis");
+      }
+    }
   }
 
   // 2. Burnt areas / Past fires
