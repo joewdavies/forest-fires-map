@@ -70,6 +70,10 @@ const FIRMS_GLOW_LAYER_ID = "active-fires-firms-glow";
 const FIRMS_LAYER_ID = "active-fires-firms-circles";
 const FIRMS_MODIS_LAYER_ID = "active-fires-firms-modis";
 const FIRMS_MODIS_ICON_ID = "firms-modis-triangle";
+// At continental zooms, individual detections are too small to distinguish
+// and expensive to draw. Keep the heatmap visible at every zoom, but only
+// introduce the sensor-specific markers at zoom 7.
+const FIRMS_DETAIL_MIN_ZOOM = 7;
 // Smoothly scale FIRMS markers with zoom. Each pair is [zoom, radius in px];
 // both VIIRS circles and MODIS triangles derive their size from these stops.
 const FIRMS_POINT_RADIUS_STOPS = [
@@ -87,6 +91,70 @@ const FIRMS_REFRESH_INTERVAL_MS = 15 * 60 * 1000;
 // nothing at all has come back from EFFIS's WMTS mount within 4s of the
 // page loading, don't wait around for the failure counter to catch up.
 const INITIAL_LOAD_TIMEOUT_MS = 10_000;
+
+/** Lightweight, development-only telemetry for comparing map interaction
+ * before and after rendering changes. It samples animation-frame intervals
+ * only while the map is moving and prints one summary per interaction. */
+function installDevelopmentPerformanceTelemetry(map: MaplibreMap): void {
+  if (!import.meta.env.DEV) return;
+
+  let measuring = false;
+  let frameTimes: number[] = [];
+
+  map.on("movestart", () => {
+    if (measuring) return;
+    measuring = true;
+    frameTimes = [];
+  });
+
+  map.on("render", () => {
+    if (measuring) frameTimes.push(performance.now());
+  });
+
+  map.on("moveend", () => {
+    if (!measuring) return;
+    measuring = false;
+
+    const intervals = frameTimes
+      .slice(1)
+      .map((time, index) => time - frameTimes[index])
+      .sort((a, b) => a - b);
+    if (intervals.length === 0) return;
+
+    const averageMs =
+      intervals.reduce((total, interval) => total + interval, 0) /
+      intervals.length;
+    const percentile95Ms =
+      intervals[
+        Math.min(intervals.length - 1, Math.floor(intervals.length * 0.95))
+      ];
+
+    console.table({
+      "Map interaction": {
+        zoom: map.getZoom().toFixed(2),
+        frames: intervals.length,
+        "average frame (ms)": averageMs.toFixed(1),
+        "p95 frame (ms)": percentile95Ms.toFixed(1),
+        "estimated FPS": (1000 / averageMs).toFixed(1),
+      },
+    });
+  });
+}
+
+function logFirmsFeatureCounts(data: FeatureCollection): void {
+  if (!import.meta.env.DEV) return;
+
+  const bySource: Record<string, number> = {};
+  for (const feature of data.features) {
+    const source = String(feature.properties?.source ?? "unknown");
+    bySource[source] = (bySource[source] ?? 0) + 1;
+  }
+
+  console.info(
+    `[FIRMS] Loaded ${data.features.length.toLocaleString()} detections for ${currentDaysRange} day(s).`,
+  );
+  console.table(bySource);
+}
 
 // Linked from the word "EFFIS" in the health warning banner (see
 // effis_status_slow/effis_status_down below) — deliberately a *direct*
@@ -120,8 +188,12 @@ const placeLabelsCheckbox = document.getElementById(
 ) as HTMLInputElement;
 
 let currentDaysRange = 7;
-const currentRangeToggle = document.getElementById("current-range-toggle") as HTMLElement;
-const currentRangeBtns = currentRangeToggle.querySelectorAll("button") as NodeListOf<HTMLButtonElement>;
+const currentRangeToggle = document.getElementById(
+  "current-range-toggle",
+) as HTMLElement;
+const currentRangeBtns = currentRangeToggle.querySelectorAll(
+  "button",
+) as NodeListOf<HTMLButtonElement>;
 
 const layersBtn = document.getElementById("layers-btn") as HTMLButtonElement;
 const layersSheet = document.getElementById("layers-sheet") as HTMLElement;
@@ -231,6 +303,7 @@ populateYearSelect();
 initTranslations();
 
 const map = await createMap(mapContainer, currentBasemap, getLanguage());
+installDevelopmentPerformanceTelemetry(map);
 const popup = new Popup({
   closeButton: true,
   closeOnClick: true,
@@ -444,7 +517,9 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && !layersSheet.hidden) closeSheet();
 });
 
-const activeFiresSourceInfoBtn = document.querySelector(".info-btn") as HTMLButtonElement | null;
+const activeFiresSourceInfoBtn = document.querySelector(
+  ".info-btn",
+) as HTMLButtonElement | null;
 if (activeFiresSourceInfoBtn) {
   activeFiresSourceInfoBtn.addEventListener("click", (e) => {
     e.preventDefault();
@@ -611,6 +686,7 @@ async function refreshFirmsData(): Promise<void> {
   try {
     const data = await fetchActiveFiresFallback(EUROPE_BBOX, currentDaysRange);
     if (thisRequest !== firmsRequestId) return; // stale-response guard, same pattern as loadFires()
+    logFirmsFeatureCounts(data);
     (map.getSource(FIRMS_SOURCE_ID) as GeoJSONSource | undefined)?.setData(
       data,
     );
@@ -914,19 +990,25 @@ function addFireLayer(map: MaplibreMap): void {
     .getStyle()
     .layers?.find((layer) => layer.type === "symbol");
 
-  map.addLayer({
-    id: FIRE_FILL_LAYER,
-    type: "fill",
-    source: FIRE_SOURCE_ID,
-    paint: { "fill-color": "#ff0000", "fill-opacity": 0.6 },
-  }, firstSymbolLayer?.id);
+  map.addLayer(
+    {
+      id: FIRE_FILL_LAYER,
+      type: "fill",
+      source: FIRE_SOURCE_ID,
+      paint: { "fill-color": "#ff0000", "fill-opacity": 0.6 },
+    },
+    firstSymbolLayer?.id,
+  );
 
-  map.addLayer({
-    id: FIRE_OUTLINE_LAYER,
-    type: "line",
-    source: FIRE_SOURCE_ID,
-    paint: { "line-color": "#ff0000", "line-width": 1 },
-  }, firstSymbolLayer?.id);
+  map.addLayer(
+    {
+      id: FIRE_OUTLINE_LAYER,
+      type: "line",
+      source: FIRE_SOURCE_ID,
+      paint: { "line-color": "#ff0000", "line-width": 1 },
+    },
+    firstSymbolLayer?.id,
+  );
 }
 
 /** The NASA FIRMS fallback layer for "Active fires" — see the "NASA FIRMS
@@ -950,91 +1032,99 @@ function addFirmsActiveFiresLayer(map: MaplibreMap): void {
   // now that each feature carries a `source` property to split on (see
   // firms.ts's rowsToFeatures; "MODIS_NRT" is MODIS, everything else is one
   // of the three VIIRS sources).
-  map.addLayer({
-    id: FIRMS_GLOW_LAYER_ID,
-    type: "heatmap",
-    source: FIRMS_SOURCE_ID,
-    layout: { visibility: "none" },
-    paint: {
-      "heatmap-weight": 1,
-      "heatmap-intensity": [
-        "interpolate",
-        ["linear"],
-        ["zoom"],
-        3,
-        0.3,
-        6,
-        0.6,
-        10,
-        1.05,
-        14,
-        1.4,
-      ],
-      "heatmap-radius": firmsGlowRadiusExpression(),
-      "heatmap-color": [
-        "interpolate",
-        ["linear"],
-        ["heatmap-density"],
-        0,
-        "rgba(226, 88, 34, 0)",
-        0.15,
-        "rgba(226, 88, 34, 0.18)",
-        0.35,
-        "rgba(255, 112, 38, 0.4)",
-        0.6,
-        "rgba(255, 181, 64, 0.68)",
-        0.82,
-        "rgba(255, 228, 128, 0.86)",
-        1,
-        "rgba(255, 249, 210, 0.96)",
-      ],
-      "heatmap-opacity": [
-        "interpolate",
-        ["linear"],
-        ["zoom"],
-        3,
-        0.4,
-        6,
-        0.55,
-        10,
-        0.72,
-        14,
-        0.78,
-      ],
+  map.addLayer(
+    {
+      id: FIRMS_GLOW_LAYER_ID,
+      type: "heatmap",
+      source: FIRMS_SOURCE_ID,
+      layout: { visibility: "none" },
+      paint: {
+        "heatmap-weight": 1,
+        // prettier-ignore
+        "heatmap-intensity": [
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          3, 0.08,
+          6, 0.12,
+          10, 0.2,
+          14, 0.3,
+        ],
+        "heatmap-radius": firmsGlowRadiusExpression(),
+        "heatmap-color": [
+          "interpolate",
+          ["linear"],
+          ["heatmap-density"],
+          0,
+          "rgba(255, 214, 64, 0)",
+          0.15,
+          "rgba(255, 214, 64, 0)",
+          0.3,
+          "rgba(255, 214, 64, 0.5)",
+          0.5,
+          "rgba(255, 153, 32, 0.75)",
+          0.75,
+          "rgba(239, 68, 35, 0.9)",
+          1,
+          "rgba(92, 10, 18, 0.98)",
+        ],
+        // "heatmap-opacity": [
+        //   "interpolate",
+        //   ["linear"],
+        //   ["zoom"],
+        //   3,
+        //   0.4,
+        //   6,
+        //   0.55,
+        //   10,
+        //   0.72,
+        //   14,
+        //   0.78,
+        // ],
+      },
     },
-  }, firstSymbolLayer?.id);
+    firstSymbolLayer?.id,
+  );
 
-  map.addLayer({
-    id: FIRMS_LAYER_ID,
-    type: "circle",
-    source: FIRMS_SOURCE_ID,
-    filter: ["!=", ["get", "source"], "MODIS_NRT"],
-    layout: { visibility: "none" },
-    paint: {
-      "circle-radius": firmsPointRadiusExpression(),
-      "circle-color": recencyColorExpression(),
-      "circle-opacity": 0.9,
+  map.addLayer(
+    {
+      id: FIRMS_LAYER_ID,
+      type: "circle",
+      source: FIRMS_SOURCE_ID,
+      minzoom: FIRMS_DETAIL_MIN_ZOOM,
+      filter: ["!=", ["get", "source"], "MODIS_NRT"],
+      layout: { visibility: "none" },
+      paint: {
+        "circle-radius": firmsPointRadiusExpression(),
+        "circle-color": recencyColorExpression(),
+        "circle-opacity": 0.9,
+      },
     },
-  }, firstSymbolLayer?.id);
+    firstSymbolLayer?.id,
+  );
 
   ensureFirmsModisIcon(map);
-  map.addLayer({
-    id: FIRMS_MODIS_LAYER_ID,
-    type: "symbol",
-    source: FIRMS_SOURCE_ID,
-    filter: ["==", ["get", "source"], "MODIS_NRT"],
-    layout: {
-      visibility: "none",
-      "icon-image": FIRMS_MODIS_ICON_ID,
-      "icon-size": firmsIconSizeExpression(),
-      "icon-allow-overlap": true,
-      "icon-ignore-placement": true,
+  map.addLayer(
+    {
+      id: FIRMS_MODIS_LAYER_ID,
+      type: "symbol",
+      source: FIRMS_SOURCE_ID,
+      minzoom: FIRMS_DETAIL_MIN_ZOOM,
+      filter: ["==", ["get", "source"], "MODIS_NRT"],
+      layout: {
+        visibility: "none",
+        "icon-image": FIRMS_MODIS_ICON_ID,
+        "icon-size": firmsIconSizeExpression(),
+        "icon-allow-overlap": true,
+        "icon-ignore-placement": true,
+      },
+      paint: {
+        "icon-color": recencyColorExpression(),
+        "icon-opacity": 0.9,
+      },
     },
-    paint: {
-      "icon-color": recencyColorExpression(),
-      "icon-opacity": 0.9,
-    },
-  }, firstSymbolLayer?.id);
+    firstSymbolLayer?.id,
+  );
 }
 
 /** Draws a small filled triangle and registers it as an SDF icon so the
@@ -1541,9 +1631,7 @@ function updateLoadingIndicatorLegendClearance(): void {
   if (mobileLegendMediaQuery.matches) {
     const bottomInset = Number.parseFloat(legendStyle.bottom) || 0;
     const desiredBottom =
-      legendCard.offsetHeight +
-      bottomInset +
-      LOADING_INDICATOR_LEGEND_GAP_PX;
+      legendCard.offsetHeight + bottomInset + LOADING_INDICATOR_LEGEND_GAP_PX;
     const maximumBottom = Math.max(
       0,
       mapContainer.clientHeight -
@@ -1557,9 +1645,7 @@ function updateLoadingIndicatorLegendClearance(): void {
   } else {
     const rightInset = Number.parseFloat(legendStyle.right) || 0;
     const desiredRight =
-      legendCard.offsetWidth +
-      rightInset +
-      LOADING_INDICATOR_LEGEND_GAP_PX;
+      legendCard.offsetWidth + rightInset + LOADING_INDICATOR_LEGEND_GAP_PX;
     const maximumRight = Math.max(
       0,
       mapContainer.clientWidth -
@@ -1636,7 +1722,8 @@ function updateLegend() {
 
   // 1.5 Active fires satellite shapes
   if (activeFiresShapesFallback) {
-    const showShapes = isCurrentMode && activeFiresCheckbox.checked && useCustomLegend;
+    const showShapes =
+      isCurrentMode && activeFiresCheckbox.checked && useCustomLegend;
     activeFiresShapesFallback.hidden = !showShapes;
     if (showShapes) {
       renderActiveFiresShapesFallback();
@@ -1765,7 +1852,10 @@ function renderActiveFiresFallback() {
       if (currentDaysRange === 1) {
         return; // Skip showing "Last 7 days" if we are only querying 1 day
       }
-      const label = currentDaysRange === 30 ? t("legend_last_30_days") : t("legend_last_7_days");
+      const label =
+        currentDaysRange === 30
+          ? t("legend_last_30_days")
+          : t("legend_last_7_days");
       html += `
         <div class="legend-fallback-row">
           <span class="legend-fallback-color" style="background-color: ${item.color};"></span>
@@ -1821,12 +1911,16 @@ function renderBurntAreasFallback() {
   // instead. Swap the whole swatch list on mode rather than filtering it,
   // so switching modes can't leave a stale mix of the two on screen.
   const colors =
-    mode === "past" ? legendConfig.pastFires.colors : legendConfig.burntAreas.colors;
+    mode === "past"
+      ? legendConfig.pastFires.colors
+      : legendConfig.burntAreas.colors;
   let html = `<div class="legend-fallback-section">`;
   colors.forEach((item) => {
     if (mode === "current") {
-      if (item.labelKey === "legend_last_7_days" && currentDaysRange < 7) return;
-      if (item.labelKey === "legend_last_30_days" && currentDaysRange < 30) return;
+      if (item.labelKey === "legend_last_7_days" && currentDaysRange < 7)
+        return;
+      if (item.labelKey === "legend_last_30_days" && currentDaysRange < 30)
+        return;
     }
     html += `
       <div class="legend-fallback-row">
