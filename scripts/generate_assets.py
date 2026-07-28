@@ -2,9 +2,11 @@ import os
 from PIL import Image, ImageOps
 
 def generate_assets():
-    logo_path = "logo.png"
+    logo_path = "public/logo.png"
     if not os.path.exists(logo_path):
-        print(f"Error: {logo_path} not found.")
+        logo_path = "logo.png"
+    if not os.path.exists(logo_path):
+        print(f"Error: logo.png not found in public/ or root.")
         return
 
     # Load original logo
@@ -30,17 +32,24 @@ def generate_assets():
     apple_icon.save("public/apple-touch-icon.png", "PNG")
     print("Generated apple-touch-icon.png")
 
-    # SVG Favicon (embed 128x128 PNG as base64 data URL)
-    fav_128 = img.resize((128, 128), Image.Resampling.LANCZOS)
-    import io
-    import base64
-    buffer = io.BytesIO()
-    fav_128.save(buffer, format="PNG")
-    b64_data = base64.b64encode(buffer.getvalue()).decode("utf-8")
-    svg_content = f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><image href="data:image/png;base64,{b64_data}" x="0" y="0" width="128" height="128"/></svg>\n'
-    with open("public/favicon.svg", "w") as f:
-        f.write(svg_content)
-    print("Generated favicon.svg (embedded PNG)")
+    # SVG Favicon: Copy public/logo.svg if present, otherwise generate from PNG
+    svg_source = "public/logo.svg"
+    if os.path.exists(svg_source):
+        import shutil
+        shutil.copy(svg_source, "public/favicon.svg")
+        print("Copied logo.svg to favicon.svg")
+    else:
+        # SVG Favicon fallback (embed 128x128 PNG as base64 data URL)
+        fav_128 = img.resize((128, 128), Image.Resampling.LANCZOS)
+        import io
+        import base64
+        buffer = io.BytesIO()
+        fav_128.save(buffer, format="PNG")
+        b64_data = base64.b64encode(buffer.getvalue()).decode("utf-8")
+        svg_content = f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><image href="data:image/png;base64,{b64_data}" x="0" y="0" width="128" height="128"/></svg>\n'
+        with open("public/favicon.svg", "w") as f:
+            f.write(svg_content)
+        print("Generated favicon.svg (embedded PNG)")
 
     # 2. Generate SEO OG Image (1200x630)
     # We will center the logo on a dark background (#1b1b1b) matching the app's header
