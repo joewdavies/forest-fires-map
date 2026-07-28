@@ -15,8 +15,7 @@
 A MapLibre GL viewer for forest fires / wildfires. Shows current active-fire
 hotspots and burnt-area perimeters by default (each independently
 toggleable), with a mode switch to browse historical burnt areas by year
-instead. Rendered as a globe, with a choice of basemap styles (a stripped
-white-and-black-labels style by default).
+instead. Rendered as a globe, with a choice of basemap styles.
 
 ## Data & basemap
 
@@ -39,6 +38,7 @@ white-and-black-labels style by default).
   EFFIS/FIRMS toggle in the layers panel. FIRMS has no burnt-area or
   Sentinel-3-equivalent data, so that fallback only ever covers "Active
   fires".
+
 - **Basemap**: several styles to choose from in the layers panel — a
   stripped-down [OpenFreeMap](https://openfreemap.org/) Liberty style
   (white background, black place labels only) by default, plus OpenFreeMap's

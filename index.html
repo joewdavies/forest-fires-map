@@ -38,6 +38,20 @@
         </div>
         <span id="status" role="status"></span>
         <div class="toolbar-actions">
+          <button
+            type="button"
+            id="about-btn"
+            class="about-btn has-tooltip"
+            data-tooltip-pos="bottom"
+            data-i18n-aria-label="aria_about"
+            aria-label="About the app"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="16" x2="12" y2="12"></line>
+              <line x1="12" y1="8" x2="12.01" y2="8"></line>
+            </svg>
+          </button>
           <div class="lang-container">
             <button
               type="button"
@@ -60,20 +74,6 @@
               <button type="button" class="lang-option" data-lang="fr">Français</button>
             </div>
           </div>
-          <button
-            type="button"
-            id="about-btn"
-            class="about-btn has-tooltip"
-            data-tooltip-pos="bottom"
-            data-i18n-aria-label="aria_about"
-            aria-label="About the app"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="10"></circle>
-              <line x1="12" y1="16" x2="12" y2="12"></line>
-              <line x1="12" y1="8" x2="12.01" y2="8"></line>
-            </svg>
-          </button>
         </div>
       </header>
       <div id="effis-warning" class="effis-warning" role="status" hidden>
