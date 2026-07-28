@@ -1392,6 +1392,12 @@ body {
     flex-direction: column;
     gap: 0.5rem;
   }
+
+  .legend-body.both-active .legend-fallback-section-shapes {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.75rem;
+  }
 }
 
 /* ---------- Custom Fallback Legend Styling ---------- */

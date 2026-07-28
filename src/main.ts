@@ -1682,7 +1682,7 @@ document.addEventListener("keydown", (e) => {
 function renderActiveFiresFallback() {
   if (!activeFiresFallback) return;
   let html = `
-    <div class="legend-fallback-section">
+    <div class="legend-fallback-section legend-fallback-section-colors">
       <h5 class="legend-fallback-heading">${t("legend_age")}</h5>`;
   legendConfig.activeFires.colors.forEach((item) => {
     html += `
@@ -1693,7 +1693,7 @@ function renderActiveFiresFallback() {
   });
   html += `
     </div>
-    <div class="legend-fallback-section">
+    <div class="legend-fallback-section legend-fallback-section-shapes">
       <h5 class="legend-fallback-heading">${t("legend_satellite")}</h5>`;
   legendConfig.activeFires.shapes.forEach((item) => {
     let shapeSvg = "";
