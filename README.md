@@ -1,5 +1,13 @@
 # Forest Fires Map
 
+<p align="center">
+  <a href="https://forest-fires-map.vercel.app/"><strong>Live Demo</strong></a>
+</p>
+
+<p align="center">
+  <img src="screenshot.png" alt="Forest Fires Map" width="800" />
+</p>
+
 A MapLibre GL viewer for forest fires / wildfires. Shows current active-fire
 hotspots and burnt-area perimeters by default (each independently
 toggleable), with a mode switch to browse historical burnt areas by year
