@@ -227,8 +227,9 @@ function currentTimeRange(days: number = 7): string {
  * and tiles would fetch the wrong area, not error).
  */
 export function tileTemplate(kind: WmtsLayerKind, days: number = 7): string {
+  const layerName = days === 30 ? WMTS_LAYERS[kind].replace(".week", ".month") : WMTS_LAYERS[kind];
   const params = new URLSearchParams({
-    layer: WMTS_LAYERS[kind],
+    layer: layerName,
     tilematrixset: "EPSG3857",
     Service: "WMTS",
     Request: "GetTile",
