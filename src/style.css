@@ -46,6 +46,18 @@ body {
   z-index: 15;
 }
 
+.logo-container {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.header-logo {
+  height: 1.25rem;
+  width: 1.25rem;
+  object-fit: contain;
+}
+
 #toolbar h1 {
   font-size: 1rem;
   font-weight: 600;
