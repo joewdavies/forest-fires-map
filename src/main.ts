@@ -774,6 +774,7 @@ function closeSheet() {
   layersSheet.addEventListener(
     "transitionend",
     () => {
+      if (layersSheet.classList.contains("open")) return;
       sheetBackdrop.hidden = true;
       layersSheet.hidden = true;
     },
@@ -1442,6 +1443,7 @@ function closeAboutModal() {
   aboutModal.addEventListener(
     "transitionend",
     () => {
+      if (aboutModal.classList.contains("open")) return;
       sheetBackdrop.hidden = true;
       aboutModal.hidden = true;
     },
@@ -1662,6 +1664,7 @@ function closeLegendCard() {
   legendCard.addEventListener(
     "transitionend",
     () => {
+      if (legendCard.classList.contains("open")) return;
       legendCard.hidden = true;
       updateLoadingIndicatorLegendClearance();
     },
